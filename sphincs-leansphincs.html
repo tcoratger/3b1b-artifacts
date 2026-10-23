@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SPHINCS+ and leanSphincs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script>
+  // MathJax: SVG output needs no font files, so it works under the artifact CSP.
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'local' },   // local: each SVG carries its glyphs, so Tex() can draw it into a canvas
+    options: { skipHtmlTags: ['script', 'style', 'textarea', 'svg', 'canvas'] }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js"></script>
+<style>
+/* Layout: one reading column (~66ch); figures break out to a wider band; sticky contents rail on wide screens.
+   Dark-first "slate" ground, light "paper" variant. Semantic hues keep ONE meaning across the whole page. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --bg-2: #151a22;        /* figure stage, callouts */
+  --bg-3: #1d2330;        /* controls, hover */
+  --fg: #e7e9ef;
+  --fg-2: #b4bccb;        /* secondary text */
+  --muted: #7d8699;       /* captions, axis labels */
+  --rule: #273042;
+  --grid: #1f2633;        /* faint grid lines in figures */
+  --blue: #58c4dd;
+  --teal: #5cd0b3;
+  --green: #83c167;
+  --yellow: #f2d45c;
+  --orange: #ff9b54;
+  --red: #fc6255;
+  --purple: #b48ee8;
+  --focus: #f2d45c;
+  --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --col: 41rem;           /* reading measure */
+  --wide: 62rem;          /* figure band */
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+    --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+    --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+    --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+  --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+  --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+  --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 1.125rem/1.68 var(--serif);
+  font-optical-sizing: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 6rem;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+
+/* ---------- page frame ---------- */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.page > * { width: 100%; max-width: var(--col); min-width: 0; }
+.page > .wide { max-width: var(--wide); }
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 3px; width: 0; background: var(--blue); z-index: 11; }
+
+/* contents rail (wide screens only) */
+.toc { display: none; }
+@media (min-width: 1280px) {
+  .toc { display: block; position: fixed; top: calc(5rem + env(safe-area-inset-top, 0px)); left: max(24px, calc((100vw - var(--wide)) / 2 - 15rem)); width: 13rem;
+         font: 500 .8rem/1.4 var(--sans); }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; counter-reset: s; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding-left: .7rem; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--fg); }
+  .toc a[aria-current="true"] { color: var(--fg); border-left-color: var(--blue); }
+}
+
+/* ---------- type ---------- */
+header.hero { padding-block: 4.5rem 1.5rem; }
+.kicker { font: 600 .78rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin: 0 0 1rem; }
+h1 { font: 700 clamp(2.3rem, 6vw, 3.6rem)/1.06 var(--serif); letter-spacing: -.015em; margin: 0 0 1rem; text-wrap: balance; }
+.lede { font-size: 1.3rem; line-height: 1.55; color: var(--fg-2); margin: 0; text-wrap: pretty; }
+h2 { font: 700 1.9rem/1.15 var(--serif); letter-spacing: -.01em; margin: 4.5rem 0 1rem; text-wrap: balance; scroll-margin-top: 2rem; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: .5rem; }
+h3 { font: 600 1.25rem/1.3 var(--serif); margin: 2.4rem 0 .6rem; text-wrap: balance; }
+p { margin: 0 0 1.1rem; text-wrap: pretty; }
+a { color: var(--blue); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+code, kbd { font: 400 .88em/1 var(--mono); background: var(--bg-3); padding: .12em .35em; border-radius: 4px; }
+dfn { font-style: normal; font-weight: 600; }
+.mjx-display, mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding-block: .25rem; }
+
+/* semantic colour classes: the same hue means the same object in prose, math and figures */
+.c-blue { color: var(--blue); } .c-teal { color: var(--teal); } .c-green { color: var(--green); }
+.c-yellow { color: var(--yellow); } .c-orange { color: var(--orange); } .c-red { color: var(--red); } .c-purple { color: var(--purple); }
+
+/* ---------- prerequisites box ---------- */
+.prereq { font: 400 .95rem/1.55 var(--sans); color: var(--fg-2); border-block: 1px solid var(--rule); padding-block: 1rem; margin-block: 2rem; display: grid; gap: .4rem; }
+.prereq b { color: var(--fg); font-weight: 600; }
+
+/* ---------- textbook environments ---------- */
+.env { margin-block: 1.6rem; padding: 1rem 1.2rem; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; }
+.env > .env-head { font: 600 .78rem/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .6rem; color: var(--muted); }
+.env > :last-child { margin-bottom: 0; }
+.env.def > .env-head { color: var(--blue); }
+.env.thm > .env-head { color: var(--purple); }
+.env.ex  > .env-head { color: var(--green); }
+.env.warn > .env-head { color: var(--red); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: .5rem; }
+.steps > li::before { content: "Step " counter(st); font: 600 .78rem/2.1 var(--sans); color: var(--muted); }
+
+details.check { margin-block: 1.6rem; border: 1px dashed var(--rule); border-radius: 8px; padding: .9rem 1.2rem; }
+details.check > summary { cursor: pointer; font: 600 .95rem/1.4 var(--sans); list-style: none; }
+details.check > summary::before { content: "Check yourself · "; color: var(--yellow); }
+details.check[open] > summary { margin-bottom: .7rem; }
+details.check .answer { border-top: 1px solid var(--rule); padding-top: .7rem; }
+
+/* ---------- figures ---------- */
+figure.fig { margin: 2.2rem 0 2.6rem; }
+.fig .stage { position: relative; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.fig canvas, .fig svg.plot { display: block; width: 100%; height: auto; max-width: 100%; touch-action: none; }
+.fig .try { position: absolute; top: .7rem; left: .9rem; font: 500 .78rem/1.3 var(--sans); color: var(--muted); pointer-events: none; }
+.fig .readout { position: absolute; top: .7rem; right: .9rem; font: 500 .85rem/1.45 var(--mono); color: var(--fg-2); text-align: right; font-variant-numeric: tabular-nums; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.2rem; padding: .8rem .2rem 0; font: 500 .85rem/1.2 var(--sans); color: var(--fg-2); }
+.controls label { display: inline-flex; align-items: center; gap: .6rem; }
+.controls output { font-family: var(--mono); color: var(--fg); min-width: 2.5ch; font-variant-numeric: tabular-nums; }
+.btn { font: 600 .82rem/1 var(--sans); color: var(--fg); background: var(--bg-3); border: 1px solid var(--rule); border-radius: 6px; padding: .55rem .8rem; cursor: pointer; min-height: 36px; }
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; }
+input[type="range"] { accent-color: var(--blue); width: 9rem; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.step-label { flex-basis: 100%; font: 400 1rem/1.5 var(--serif); color: var(--fg); min-height: 3em; }
+input.scrub { flex: 1 1 10rem; width: auto; min-width: 8rem; accent-color: var(--yellow); }
+[data-focus] { cursor: help; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 4px; border-radius: 3px; }
+[data-focus]:hover, [data-focus]:focus-visible { background: var(--bg-3); }
+figcaption { font: 400 .92rem/1.55 var(--sans); color: var(--fg-2); margin-top: .8rem; max-width: var(--col); }
+figcaption b { color: var(--fg); font-weight: 600; }
+.svg-text { font: 500 13px var(--sans); fill: currentColor; }
+svg.micro { display: inline-block; vertical-align: middle; height: 1.5em; width: auto; margin-inline: .1em; overflow: visible; }
+
+footer.refs { margin-top: 5rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; font: 400 .95rem/1.6 var(--sans); color: var(--fg-2); }
+footer.refs ol { padding-left: 1.2rem; }
+
+@media (max-width: 560px) {
+  body { font-size: 1.05rem; }
+  h2 { font-size: 1.55rem; margin-top: 3.5rem; }
+  .env { padding: .9rem 1rem; }
+  .fig .readout { position: static; padding: .4rem .7rem 0; text-align: left; }
+  .fig .try { position: static; display: block; padding: .6rem .7rem 0; }
+}
+
+.tldr { margin: 0; padding-left: 1.2rem; display: grid; gap: .45rem; font-size: 1.02rem; }
+.remember { padding-left: 1.2rem; display: grid; gap: .4rem; }
+.tablewrap { overflow-x: auto; margin-block: 1.2rem .4rem; }
+table.tiers { border-collapse: collapse; width: 100%; font: 400 .92rem/1.4 var(--sans); font-variant-numeric: tabular-nums; }
+table.tiers th, table.tiers td { padding: .45rem .7rem; border-bottom: 1px solid var(--rule); text-align: left; white-space: nowrap; }
+table.tiers thead th { color: var(--fg); font-weight: 600; }
+table.tiers tbody th { color: var(--muted); font-weight: 500; }
+table.tiers td { font-family: var(--mono); font-size: .86rem; color: var(--fg-2); }
+p.small { font: 400 .85rem/1.5 var(--sans); color: var(--muted); }
+</style>
+
+<div class="progress" aria-hidden="true"></div>
+<nav class="toc" aria-label="Contents"><ol></ol></nav>
+
+<main class="page">
+  <header class="hero">
+    <p class="kicker">Post-quantum signatures for Ethereum</p>
+    <h1>SPHINCS+ and leanSphincs</h1>
+    <p class="lede">A signature scheme built from nothing but a hash function. Hash chains sign digits, a Merkle tree gathers the keys under one root, and a few-time layer lets the signer forget which keys it already used. leanSphincs is a version of it tuned for Ethereum.</p>
+  </header>
+
+  <div class="env thm">
+    <p class="env-head">The 30-second version</p>
+    <ol class="tldr">
+      <li>A <span class="c-teal">one-time signature</span> reveals points on hash chains. Hashing only goes forward, so fixing the sum of the signed digits stops forgeries.</li>
+      <li>A <span class="c-purple">Merkle tree</span> puts \(2^{h}\) one-time keys under a 32-byte <span class="c-blue">public key</span>.</li>
+      <li>SPHINCS+ picks the leaf by hashing the <span class="c-yellow">message</span>, so the signer keeps no counter. Leaves then get reused, so the message is signed by <span class="c-orange">FORS</span>, which survives a few uses. The leaf's one-time key only ever signs FORS's fixed public key.</li>
+      <li><b>leanSphincs</b> uses one tree of height 26, FORS with 24 trees of height 10, and WOTS+C. A signature is 5,684 bytes, verifies in 373 BLAKE2s compressions, and a key lasts up to \(2^{30}\) signatures. <b>Pruning</b> builds only part of the tree, so a hardware wallet can generate a key in about a minute.</li>
+    </ol>
+  </div>
+
+  <div class="prereq">
+    <div><b>You need:</b> a hash function \(H\). It maps any input to a short string (16 bytes here), it is fast to compute, and nobody can run it backwards or find two inputs with the same output.</div>
+    <div><b>You will build:</b> a SPHINCS+ signature, piece by piece, and the parameter choices behind leanSphincs.</div>
+  </div>
+
+  <section>
+    <h2 id="why"><span class="num">1</span>Why hash-based signatures</h2>
+    <p>Ethereum signs with ECDSA and BLS. Both rely on the discrete-logarithm problem on elliptic curves, which Shor's algorithm solves on a large quantum computer. A hash-based signature relies only on \(H\) being one-way and collision resistant, and no known quantum algorithm breaks that faster than brute force. The cost is size: an ECDSA signature is 65 bytes, a leanSphincs signature is 5,684.</p>
+    <p>Every piece below is made of the same operation, so verification cost is counted in calls to \(H\), here 64-byte compressions of BLAKE2s or permutations of Keccak.</p>
+  </section>
+
+  <section>
+    <h2 id="chains"><span class="num">2</span>Signing a digit with a hash chain</h2>
+    <p>Pick a random <span class="c-red">secret</span> \(\class{c-red}{x_0}\) and hash it again and again. Publish only the top. Figure 1 builds a chain of length \(w = 4\) with real SHA-256 values, truncated to four hex digits.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-chain" aria-labelledby="cap-chain">
+    <div class="stage">
+      <canvas data-aspect="0.33" data-aspect-narrow="0.85" role="img" aria-label="A hash chain of four values. Revealing the third value signs the digit 2; anyone can hash it forward to forge digit 3 but nobody can go back."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-chain"><b>Figure 1.</b> Revealing \(x_d\) signs the digit \(d\). The verifier hashes up to the public top. A forger can also hash forward, so a lone chain lets anyone raise a signed digit.</figcaption>
+  </figure>
+
+  <section>
+    <div class="env def">
+      <p class="env-head">Definition 1 · Winternitz one-time signature (WOTS)</p>
+      <p>Hash the message to \(\ell\) digits \(\class{c-yellow}{d_1,\dots,d_\ell}\) in base \(w\). Use one chain per digit. The signature reveals \(x_{i,d_i}\) on chain \(i\). The verifier hashes it \(w-1-d_i\) more times and compares the tops with the <span class="c-blue">public key</span>.</p>
+    </div>
+    <p>Figure 1 shows the flaw: anyone can raise a digit. The repair is to accept only digit vectors whose <em>sum</em> is a fixed target. Raising one digit then forces lowering another, and lowering means inverting \(H\). WOTS+ enforces this with extra checksum chains. <b>WOTS+C</b> drops them: the signer appends a counter \(c\) to the message and tries \(c = 0, 1, 2, \dots\) until the digits hit the target. Figure 2 does this on four chains with target sum 6.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-wotsc" aria-labelledby="cap-wotsc">
+    <div class="stage">
+      <svg class="plot" viewBox="0 0 640 300" role="img" aria-label="Four hash chains. A counter is incremented until the four digits of the hash sum to 6; counter 6 gives digits 1, 2, 0, 3."></svg>
+      <div class="try">Change the counter</div>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>counter c <input id="wc-c" type="range" min="0" max="19" value="6"><output for="wc-c">6</output></label>
+      <button class="btn" type="button" id="wc-next">Next accepted counter</button>
+    </div>
+    <figcaption id="cap-wotsc"><b>Figure 2.</b> WOTS+C on a toy key: 4 chains of length 4, target sum 6, message “hello”. Counters 0 to 5 are rejected; \(c = 6\) gives digits (1, 2, 0, 3). A forger who raises any digit breaks the sum.</figcaption>
+  </figure>
+
+  <section>
+    <p>leanSphincs uses 64 chains of length 4 with target sum 120. The average sum of 64 random digits is 96. Setting the target higher means the verifier walks only \(64 \cdot 3 - 120 = 72\) chain steps, while the signer tries about 830 counters, since a random digest hits the sum 120 with probability \(1/829\). The signature holds 64 chain values of 16 bytes, 1,024 bytes, plus a 4-byte counter.</p>
+  </section>
+
+  <section>
+    <h2 id="merkle"><span class="num">3</span>Many keys under one root</h2>
+    <p>A WOTS key signs once. To sign many times, generate \(2^{h}\) of them and hash their public keys pairwise into a Merkle tree. The <span class="c-blue">root</span> is the public key. A signature names a leaf, gives that leaf's WOTS signature, and adds the <span class="c-purple">authentication path</span>: the \(h\) sibling nodes the verifier needs to climb back to the root (Figure 3).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-merkle" aria-labelledby="cap-merkle">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="0.85" role="img" aria-label="A Merkle tree of 8 WOTS public keys. Leaf 5 signs; its three siblings form the authentication path; the verifier climbs to the root."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-merkle"><b>Figure 3.</b> Eight WOTS keys under one root. Signing with leaf 5 costs \(h = 3\) extra hashes in the signature, whatever the number of leaves. leanSphincs uses \(h = 26\): 416 bytes of path for 67 million leaves.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="stateless"><span class="num">4</span>Forgetting which keys were used</h2>
+    <p>This tree, signed leaf by leaf with a counter, is XMSS. It is safe only if the signer never uses a leaf twice, which means storing the counter and never restoring an old backup. SPHINCS+ removes that state: the leaf index is read from a hash of the message and a randomizer \(R\). Figure 4 shows the price. Random picks collide long before the leaves run out; with \(2^{26}\) leaves the first repeat comes after the order of \(\sqrt{2^{26}} = 8{,}192\) signatures.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-birthday" aria-labelledby="cap-birthday">
+    <div class="stage">
+      <canvas data-aspect="0.22" data-aspect-narrow="0.45" role="img" aria-label="Signatures dropped on random leaves of a 64-leaf tree. Reused leaves turn red long before all leaves are used."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>signatures <input id="bd-n" type="range" min="1" max="96" value="24"><output for="bd-n">24</output></label>
+    </div>
+    <figcaption id="cap-birthday"><b>Figure 4.</b> A toy tree of 64 leaves, each signature landing on a random leaf. Already at 10 signatures, a repeat is more likely than not. Reuse cannot be avoided, so whatever a leaf signs must survive being signed a few times.</figcaption>
+  </figure>
+
+  <section>
+    <p>The fix comes in two moves. First, the leaf's WOTS key no longer signs the message. It signs the public key of a second scheme attached to that leaf, and that public key is fixed, so a reused leaf signs the <em>same</em> value twice and leaks nothing new. Second, that scheme must be safe after a few signatures. It is <span class="c-orange">FORS</span>.</p>
+    <div class="env def">
+      <p class="env-head">Definition 2 · FORS (forest of random subsets)</p>
+      <p>Take \(k\) Merkle trees of height \(a\) whose leaves are hashes of secrets. Hash the message with \(R\) and cut the digest into \(k\) indices of \(a\) bits. In tree \(j\), reveal secret number \(i_j\) and its authentication path. The FORS public key is the hash of the \(k\) roots.</p>
+    </div>
+  </section>
+
+  <figure class="fig wide" id="fig-fors" aria-labelledby="cap-fors">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="0.95" role="img" aria-label="FORS with three trees of height 3. The digest bits 001 100 100 select leaves 1, 4 and 4; their secrets and paths are revealed and the roots hashed into the FORS public key."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-fors"><b>Figure 5.</b> FORS with \(k = 3\), \(a = 3\). The digest of “hello” starts 320a…, whose first nine bits 001 100 100 pick leaves 1, 4 and 4. Each signature reveals one secret per tree, so a few signatures reveal only a few secrets per tree.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="lifetime"><span class="num">5</span>How many signatures a key can make</h2>
+    <p>Suppose the FORS at one leaf has signed \(r\) times. A forger wants a new message whose \(k\) indices all point at secrets already revealed. In one tree that happens with probability \(1-(1-2^{-a})^{r}\), and the trees are independent:</p>
+    \[ \Pr[\text{forge at a leaf used } r \text{ times}] \;=\; \Big(\underbrace{1-\big(1-2^{-\class{c-orange}{a}}\big)^{r}}_{\text{one tree already open}}\Big)^{\class{c-orange}{k}} \]
+    <p>With \(k = 24\), \(a = 10\) and \(r = 16\), one tree is open with probability \(1.55\%\), and all 24 with probability \(2^{-144}\). If a key signs \(N\) times, the leaves receive \(N/2^{26}\) signatures each on average, scattered at random. Averaging the formula over that scatter gives the security in bits as a function of \(N\). The key's lifetime is the largest \(N\) that still keeps 127 bits (Figure 6).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-life" aria-labelledby="cap-life">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="0.95" role="img" aria-label="Security in bits against the number of signatures, for the full tree and two pruned subtrees. Each curve crosses 127 bits at its lifetime: 1.2 billion, 24 million, 242 thousand."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>log₂ N <input id="lf-n" type="range" min="12" max="34" step="0.25" value="30"><output for="lf-n">30</output></label>
+    </div>
+    <figcaption id="cap-life"><b>Figure 6.</b> Security of leanSphincs FORS (\(k = 24\), \(a = 10\)) as signatures accumulate. The full tree keeps 127 bits up to \(1.20 \cdot 10^{9}\) signatures, just over \(2^{30}\). The two lower curves are pruned keys from Section 7. These are the cover-rule estimates; the lifetimes proved in Lean are 4 to 13% lower.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="lean"><span class="num">6</span>The whole leanSphincs signature</h2>
+    <p>Figure 7 puts the pieces in order on the real parameters. The byte counter adds each part as the verifier consumes it. The message chooses the leaf and the FORS indices; FORS yields a public key; WOTS+C signs that key; the path climbs 26 levels to the root.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-whole" aria-labelledby="cap-whole">
+    <div class="stage">
+      <canvas data-aspect="0.56" data-aspect-narrow="1.62" role="img" aria-label="A leanSphincs signature verified from the message up: randomizer, FORS with 24 trees, WOTS+C with 64 chains, and a 26-node path to the public key, totalling 5,684 bytes."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-whole"><b>Figure 7.</b> One leanSphincs signature: \(R\) (16 B), 24 FORS secrets with 10-node paths (4,224 B), 64 WOTS+C chain values and a counter (1,028 B), and 26 path nodes (416 B). Total 5,684 bytes. The verifier spends 373 BLAKE2s compressions.</figcaption>
+  </figure>
+
+  <section>
+    <p>The standard SLH-DSA (FIPS 205) stacks the tree differently. SLH-DSA-128s is a <em>hypertree</em> of 7 layers of height 9: each layer's WOTS key signs the root of the layer below, so a signature carries 7 WOTS signatures. Layers keep key generation small for \(2^{64}\) signatures. leanSphincs targets \(2^{30}\), so one layer of height 26 is affordable and saves six WOTS signatures. Figure 8 compares the sizes.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-sizes" aria-labelledby="cap-sizes">
+    <div class="stage">
+      <svg class="plot" viewBox="0 0 680 330" role="img" aria-label="Stacked bars of signature size: SLH-DSA-128s 7,856 bytes, leanSphincs 5,684, leanSphincs with WOTS forest 4,276, SLH-DSA-128-24 3,856."></svg>
+    </div>
+    <figcaption id="cap-sizes"><b>Figure 8.</b> Signature bytes by part. SLH-DSA-128-24 (NIST SP 800-230 draft, \(2^{24}\) signatures) is smallest because its 6 FORS trees have height 24, which makes the signer hash 16.8 million leaves per tree. leanSphincs's trees have 1,024 leaves, and its whole FORS signing costs about 61,000 compressions.</figcaption>
+  </figure>
+
+  <section>
+    <p>The fourth bar replaces FORS with a two-level forest of small WOTS keys (6 chains of length 5, target sum 5): 25% smaller and 18% cheaper to verify at the same signing cost. The idea came from Jonas Nick's submission to <a href="https://sig.golf/">sig.golf</a>. That leaderboard scores hash-based schemes by bytes times verification cycles and checks each entry's 127-bit security in Lean. On 22 October 2026 its smallest entry was 5,216 bytes and its best product 36,479,157 byte·cycles.</p>
+  </section>
+
+  <section>
+    <h2 id="pruning"><span class="num">7</span>Pruning: build only part of the tree</h2>
+    <p>Generating a full key means building all \(2^{26}\) leaves, each a WOTS+C key: about \(16 \cdot 10^{9}\) compressions, 16 seconds on a laptop and about 6 days on a hardware wallet. Conduition's <em>hypertree pruning</em> builds one subtree of \(2^{b}\) leaves and fills the \(26 - b\) missing siblings above it with pseudorandom surrogate values. The root looks like any other public key. Figure 9 runs it on a toy tree.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-prune" aria-labelledby="cap-prune">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.0" role="img" aria-label="A tree of 32 leaves where only a 4-leaf subtree is built; three surrogate siblings complete the root; the signer retries R until the message lands in the subtree."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-prune"><b>Figure 9.</b> A toy tree of height 5 pruned to a subtree of height \(b = 2\). The signer retries \(R\) until the message lands in the subtree, \(2^{5-2} = 8\) tries on average. All signatures share 4 leaves instead of 32, so each FORS is used 8 times more often.</figcaption>
+  </figure>
+
+  <section>
+    <p>Each retry costs one compression, \(2^{26-b}\) of them on average, and every FORS sees \(2^{26-b}\) times more signatures, which moves the curve in Figure 6 to the left. The leanSphincs note picks three points on that trade:</p>
+    <div class="tablewrap">
+    <table class="tiers">
+      <thead><tr><th></th><th>Light</th><th>Standard</th><th>Full</th></tr></thead>
+      <tbody>
+        <tr><th>device</th><td>Ledger Nano S+</td><td>weak CPU</td><td>powerful CPU</td></tr>
+        <tr><th>subtree \(b\)</th><td>13</td><td>20</td><td>26</td></tr>
+        <tr><th>lifetime (proved)</th><td>211K</td><td>22M</td><td>1.15B</td></tr>
+        <tr><th>keygen</th><td>2.0M · 60 s</td><td>254M · 1.0 s</td><td>16.2B · 16 s</td></tr>
+        <tr><th>signing</th><td>74K · 2.2 s</td><td>70K · 0.3 ms</td><td>93K · 0.1 ms</td></tr>
+        <tr><th>grinding tries</th><td>8,192</td><td>64</td><td>1</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="small">Counts are BLAKE2s compressions. Signing includes the grinding.</p>
+    <p>Pruning is new and, per its author, not yet peer reviewed. One risk is that a signer reuses the same seed with two different pruning parameters. The note's fix is to derive the working seed as \(H(\text{seed} \,\|\, b)\), so each choice of \(b\) gives an unrelated key.</p>
+  </section>
+
+  <section>
+    <h2 id="remember"><span class="num">8</span>What to remember</h2>
+    <ul class="remember">
+      <li>Hash chains sign digits; a fixed digit sum (WOTS+C) blocks forgeries.</li>
+      <li>A Merkle tree turns many one-time keys into one public key, at \(h\) hashes per signature.</li>
+      <li>Statelessness forces leaf reuse, so the leaf signs a fixed FORS key and FORS signs the message.</li>
+      <li>Lifetime is set by how many FORS secrets leak: \(k = 24\), \(a = 10\) and \(h = 26\) give about \(2^{30}\) signatures at 127 bits.</li>
+      <li>leanSphincs: 5,684 bytes (4,276 with the WOTS forest), 373 compressions to verify, and pruning to trade lifetime for keygen time.</li>
+    </ul>
+  </section>
+
+  <footer class="refs">
+    <p><b>Further reading</b></p>
+    <ol>
+      <li>NIST, <a href="https://doi.org/10.6028/NIST.FIPS.205">FIPS 205, Stateless Hash-Based Digital Signature Standard</a> (2024). The SLH-DSA specification: Sections 5–8 define WOTS+, XMSS, the hypertree and FORS.</li>
+      <li>Bernstein, Hülsing, Kölbl, Niederhagen, Rijneveld, Schwabe, <a href="https://eprint.iacr.org/2019/1086">The SPHINCS+ Signature Framework</a>, ACM CCS 2019. The design rationale and security proof.</li>
+      <li>Hülsing, Kudinov, Ronen, Yogev, <a href="https://eprint.iacr.org/2022/778">SPHINCS+C: Compressing SPHINCS+ With (Almost) No Cost</a>, IEEE S&amp;P 2023. WOTS+C and the counter search.</li>
+      <li>Dang, Moody, <a href="https://csrc.nist.gov/pubs/sp/800/230/ipd">NIST SP 800-230 (draft)</a>, additional SLH-DSA parameter sets for limited-signature use, including SLH-DSA-128-24.</li>
+      <li>Wambsgans, <a href="https://sphincs.art/">A proposal for leanSphincs</a> and its <a href="https://github.com/TomWambsgans/leanXMSS-leanSPHINCS-candidates/releases/download/doc-latest/leanSPHINCS.pdf">note</a>. Parameters, pruned tiers, threshold signing, the WOTS forest, and Lean proofs.</li>
+      <li>Conduition, <a href="https://conduition.io/cryptography/hypertree-pruning/">Pruning Hypertrees for the Lax and Lazy</a> (2026). The pruning technique and its effect on the signature limit.</li>
+      <li><a href="https://sig.golf/">sig.golf</a>. A public leaderboard of hash-based signatures for Ethereum, scored by size times verification cycles and checked in Lean.</li>
+    </ol>
+  </footer>
+</main>
+
+<script>
+/* ================= figure runtime (keep; extend per page) ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const tok = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Every figure registers a redraw so a theme switch repaints canvases with the new tokens.
+const redrawers = new Set();
+const redrawAll = () => redrawers.forEach(f => f());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Hi-DPI canvas that tracks its CSS width; height = width * data-aspect
+// (data-aspect-narrow below 560px, so a figure stays large on a phone).
+function canvasFig(canvas, draw) {
+  const ctx = canvas.getContext('2d');
+  const state = { ctx, w: 0, h: 0 };
+  const paint = () => { ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, state.w, state.h); draw(state); };
+  const resize = () => {
+    const w = canvas.clientWidth; if (!w) return;
+    const aspect = parseFloat((w < 560 && canvas.dataset.aspectNarrow) || canvas.dataset.aspect || '0.6');
+    const h = Math.round(w * aspect);
+    canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * devicePixelRatio); canvas.height = Math.round(h * devicePixelRatio);
+    state.w = w; state.h = h; paint();
+  };
+  new ResizeObserver(resize).observe(canvas);
+  redrawers.add(paint);
+  resize();
+  return paint;
+}
+
+// rAF loop that runs only while its figure is on screen and playing.
+function loop(el, tick) {
+  let on = false, visible = false, last = 0, id = 0;
+  const frame = t => { const dt = Math.min(0.05, (t - last) / 1000 || 0); last = t; if (tick(dt) === false) api.stop(); else id = requestAnimationFrame(frame); };
+  const sync = () => { cancelAnimationFrame(id); if (on && visible) { last = performance.now(); id = requestAnimationFrame(frame); } };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; sync(); }).observe(el);
+  const api = { start() { on = true; sync(); }, stop() { on = false; sync(); el.dispatchEvent(new Event('loopstop')); }, get running() { return on; } };
+  return api;
+}
+
+// Step-through controller: Reset / ← / Play / → buttons, plus keyboard ←/→ when the figure has focus.
+function stepper(fig, { count, render, interval = 900 }) {
+  let i = 0, timer = 0;
+  const btn = a => $(`[data-act="${a}"]`, fig);
+  const play = btn('play');
+  const show = () => {
+    const n = count();
+    i = Math.max(0, Math.min(i, n));
+    render(i, n);
+    btn('prev').disabled = i === 0; btn('next').disabled = i === n;
+  };
+  const stop = () => { clearInterval(timer); timer = 0; play.setAttribute('aria-pressed', 'false'); play.textContent = 'Play'; };
+  const go = d => { i += d; show(); };
+  btn('prev').onclick = () => { stop(); go(-1); };
+  btn('next').onclick = () => { stop(); go(1); };
+  btn('reset').onclick = () => { stop(); i = 0; show(); };
+  play.onclick = () => {
+    if (timer) return stop();
+    if (i >= count()) i = 0;
+    play.setAttribute('aria-pressed', 'true'); play.textContent = 'Pause';
+    if (reducedMotion.matches) { i = count(); show(); return stop(); }
+    show();
+    timer = setInterval(() => { if (i >= count()) return stop(); go(1); }, interval);
+  };
+  fig.addEventListener('keydown', e => {
+    if (e.target.matches('input')) return;
+    if (e.key === 'ArrowRight') { stop(); go(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { stop(); go(-1); e.preventDefault(); }
+  });
+  return { show, reset() { stop(); i = 0; show(); }, get i() { return i; } };
+}
+
+// Range input bound to its <output>.
+function range(input, onInput, fmt = v => v) {
+  const out = input.parentElement.querySelector('output');
+  const upd = () => { if (out) out.textContent = fmt(+input.value); onInput(+input.value); };
+  input.addEventListener('input', upd);
+  upd();
+}
+
+// Draggable SVG element in viewBox coordinates; also arrow-key movable.
+function draggable(svg, el, onMove, step = 10) {
+  const toSvg = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing'; e.preventDefault(); });
+  el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) { const p = toSvg(e); onMove(p.x, p.y); } });
+  el.addEventListener('pointerup', () => { el.style.cursor = 'grab'; });
+  el.addEventListener('keydown', e => {
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (d) { e.preventDefault(); onMove(+el.getAttribute('cx') + d[0], +el.getAttribute('cy') + d[1]); }
+  });
+}
+
+const typeset = el => window.MathJax?.typesetPromise ? MathJax.typesetPromise([el]) : Promise.resolve();
+
+/* ================= Scene: a small Manim-style animation engine =================
+   A scene is a list of objects plus a timeline of property tweens grouped into "beats".
+   The frame at time t is a pure function of t, so the timeline can be scrubbed, replayed,
+   stepped beat by beat and rebuilt when a parameter changes.
+
+     const sc = new Scene('#fig-x', { x: [-1, 10], y: [-1, 6], equal: true }, (sc, P) => {
+       const a = sc.add(Dot({ x: 1, y: 1, color: 'blue', opacity: 0, tag: 'a' }));
+       const l = sc.add(Line({ x1: 1, y1: 1, x2: 5, y2: 3, color: 'yellow', draw: 0 }));
+       sc.play('Place the point a.', [fadeIn(a)]);
+       sc.play('Draw the segment from a.', [create(l)], 1.2);
+       sc.play('Slide a along it.', [to(a, { x: 5, y: 3 })]);
+     });
+
+   World coordinates have y pointing up. Sizes r and width are in CSS pixels; R (circle) is in
+   world units. Colours are token names ('blue', 'muted', 'fg') or literal CSS colours.
+
+   Phones: options may be a function of `narrow` (canvas under 560px), and build() can read
+   sc.narrow to stack the layout vertically. Crossing the breakpoint rebuilds the scene. */
+
+const ease = {
+  smooth: t => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2,
+  linear: t => t,
+  out: t => 1 - (1 - t) ** 3,
+  there: t => Math.sin(Math.PI * t),           // 0 → 1 → 0, for indicate()
+};
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+const colorCache = new Map();
+function rgb(c) {
+  const css = /^(#|rgb|hsl)/.test(c) ? c : tok(c);
+  if (colorCache.has(css)) return colorCache.get(css);
+  const cv = document.createElement('canvas').getContext('2d');
+  cv.fillStyle = '#000'; cv.fillStyle = css;
+  const s = cv.fillStyle;   // normalised to #rrggbb or rgba(...)
+  const v = s[0] === '#' ? [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+  colorCache.set(css, v); return v;
+}
+redrawers.add(() => colorCache.clear());
+const isColor = v => typeof v === 'string' && v !== '' && !/^\d/.test(v);
+function mix(a, b, p) {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * p;
+  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) return a.map((x, i) => mix(x, b[i], p));
+  if (isColor(a) && isColor(b) && a !== b) {
+    if (p <= 0) return a; if (p >= 1) return b;
+    const [x, y] = [rgb(a), rgb(b)];
+    return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * p)).join(',')})`;
+  }
+  return p < 1 ? a : b;   // strings, booleans: switch at the end
+}
+const paintColor = c => (/^(#|rgb|hsl)/.test(c) ? c : tok(c));
+
+class Scene {
+  static all = new Map();
+  constructor(fig, opts, build) {
+    this.fig = typeof fig === 'string' ? $(fig) : fig;
+    this.canvas = $('canvas', this.fig);
+    this.optsIn = opts; this.narrow = this.canvas.clientWidth < 560; this.#layout();
+    this.build = build; this.params = {};
+    this.t = 0; this.playing = false; this.focus = null;
+    this.ctx = this.canvas.getContext('2d');
+    Scene.all.set(this.fig.id, this);
+    if (this.optsIn.controls === false || (typeof opts === 'function' && opts(false).controls === false)) this.#bareControls(); else this.#controls();
+    this.#measure();
+    this.rebuild();
+    new ResizeObserver(() => this.#resize()).observe(this.canvas);
+    new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; if (!this.visible) this.pause(); }).observe(this.fig);
+    redrawers.add(() => this.render());
+    this.#resize();
+  }
+
+  #layout() { this.opts = { x: [0, 10], y: [0, 6], equal: false, pad: 24, rest: 'end', ...(typeof this.optsIn === 'function' ? this.optsIn(this.narrow) : this.optsIn) }; }
+
+  /* ---- building ---- */
+  // New params restart at the resting frame; a plain rebuild (resize, fonts ready) keeps the current time.
+  rebuild(params) {
+    const keep = !params && this.objs;
+    Object.assign(this.params, params);
+    this.objs = []; this.tracks = []; this.beats = []; this.T = 0;
+    this.build(this, this.params);
+    if (!this.beats.length) this.beats.push({ label: '', t0: 0, t1: 0 });
+    this.scrub.max = Math.max(1, Math.round(this.T * 100));
+    this.seek(keep ? this.t : this.opts.rest === 'end' ? this.T : this.opts.rest);
+  }
+  // Rebuild with new params and play the whole (short) timeline: lets an instrument animate a change.
+  animateTo(params) { this.rebuild(params); this.stopAt = this.T; this.playFrom(0); }
+  add(o) { o.opacity ??= 1; o.init = { ...o }; this.objs.push(o); return o; }
+  addAll(list) { return list.map(o => this.add(o)); }
+  play(label, anims, dur = 1, e = ease.smooth) {
+    const t0 = this.T;
+    anims.flat(Infinity).forEach(a => a(this, t0, dur, e));
+    this.beats.push({ label, t0, t1: t0 + dur });
+    this.T += dur;
+  }
+  wait(dur = .6) { this.T += dur; if (this.beats.length) this.beats.at(-1).t1 = this.T; }
+  valueAt(o, prop, t) {
+    let v = o.init[prop];
+    for (const k of this.tracks) if (k.o === o && k.prop === prop && t >= k.t0) v = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return v;
+  }
+  track(o, prop, t0, t1, value) { this.tracks.push({ o, prop, t0, t1, value }); }
+
+  /* ---- coordinates ---- */
+  #resize() {
+    const w = this.canvas.clientWidth; if (!w || w === this.w) return;
+    this.#measure();
+    this.rebuild();      // layouts may depend on sc.narrow and on pixel sizes (texRow), so rebuild at the new size
+  }
+  #measure() {
+    const c = this.canvas, w = c.clientWidth || c.parentElement.clientWidth || 640;
+    if ((w < 560) !== this.narrow) { this.narrow = w < 560; this.#layout(); }
+    const h = Math.round(w * parseFloat((w < 560 && c.dataset.aspectNarrow) || c.dataset.aspect || '0.6'));
+    c.style.height = h + 'px'; c.width = Math.round(w * devicePixelRatio); c.height = Math.round(h * devicePixelRatio);
+    this.w = w; this.h = h;
+    const { x: [x0, x1], y: [y0, y1], pad } = this.opts;
+    let sx = (w - 2 * pad) / (x1 - x0), sy = (h - 2 * pad) / (y1 - y0);
+    if (this.opts.equal) sx = sy = Math.min(sx, sy);
+    this.sx = sx; this.sy = sy;
+    this.ox = (w - sx * (x1 - x0)) / 2 - sx * x0;
+    this.oy = (h + sy * (y1 - y0)) / 2 + sy * y0;
+  }
+  X(x) { return this.ox + this.sx * x; }
+  Y(y) { return this.oy - this.sy * y; }
+
+  /* ---- time ---- */
+  stateAt(t) {
+    const s = new Map(this.objs.map(o => [o, { ...o.init }]));
+    for (const k of this.tracks) if (t >= k.t0) s.get(k.o)[k.prop] = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return s;
+  }
+  beatAt(t) { let i = 0; this.beats.forEach((b, k) => { if (t >= b.t0 - 1e-9) i = k; }); return i; }
+  seek(t) {
+    this.t = Math.max(0, Math.min(this.T, t));
+    this.scrub.value = Math.round(this.t * 100);
+    const i = this.beatAt(this.t);
+    if (this.label.textContent !== this.beats[i].label) this.label.textContent = this.beats[i].label;
+    this.render();
+  }
+  render() {
+    if (!this.w) return;
+    const { ctx } = this;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const s = this.cur = this.stateAt(this.t);    // S.cur.get(obj) lets one object's paint read another's state
+    for (const o of this.objs) {
+      const p = s.get(o);
+      let alpha = p.opacity;
+      if (this.focus && !(p.tag && p.tag.split(' ').includes(this.focus))) alpha *= .22;
+      if (alpha <= 0.002 || p.draw === 0) continue;
+      ctx.save(); ctx.globalAlpha = alpha;
+      if (p.glow > 0) { ctx.shadowColor = paintColor(p.color || 'fg'); ctx.shadowBlur = 18 * p.glow; }
+      o.paint(ctx, p, this);
+      ctx.restore();
+    }
+    this.onFrame?.(s, this.t);
+  }
+  playFrom(t) {
+    if (reducedMotion.matches) { this.next(); return; }
+    this.seek(t); this.playing = true; this.playBtn.setAttribute('aria-pressed', 'true'); this.playBtn.textContent = 'Pause';
+    let last = performance.now();
+    const frame = now => {
+      if (!this.playing) return;
+      const t = this.t + (now - last) / 1000; last = now;
+      if (t >= this.stopAt) { this.seek(this.stopAt); return this.pause(); }
+      this.seek(t); requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+  pause() { this.playing = false; this.playBtn.setAttribute('aria-pressed', 'false'); this.playBtn.textContent = 'Play'; }
+  next() { const i = this.beatAt(this.t), b = this.beats[i]; const target = this.t < b.t1 - 1e-6 ? b.t1 : (this.beats[i + 1]?.t1 ?? this.T);
+           if (reducedMotion.matches) return this.seek(target); this.stopAt = target; this.playFrom(this.t < b.t1 - 1e-6 ? this.t : (this.beats[i + 1]?.t0 ?? this.T)); }
+  prev() { this.pause(); const i = this.beatAt(this.t), b = this.beats[i]; this.seek(this.t > b.t0 + .05 || i === 0 ? b.t0 : this.beats[i - 1].t0); }
+  setFocus(tag) { this.focus = tag; this.render(); }
+
+  // Instruments without a timeline: no buttons, the scene simply rests on its (single) frame.
+  #bareControls() {
+    this.playBtn = document.createElement('button'); this.scrub = document.createElement('input'); this.label = document.createElement('div');
+  }
+  // CSS-pixel offset inside the canvas → world coordinates.
+  toWorld(px, py) { return [(px - this.ox) / this.sx, (this.oy - py) / this.sy]; }
+  // Pointer helper for instruments: cb(x, y, type) in world coordinates, type 'down' | 'move' | 'up'.
+  onPointer(cb) {
+    const c = this.canvas; let down = false;
+    const at = e => { const r = c.getBoundingClientRect(); return this.toWorld(e.clientX - r.left, e.clientY - r.top); };
+    c.addEventListener('pointerdown', e => { down = true; c.setPointerCapture(e.pointerId); cb(...at(e), 'down'); });
+    c.addEventListener('pointermove', e => cb(...at(e), down ? 'drag' : 'move'));
+    c.addEventListener('pointerup', e => { down = false; cb(...at(e), 'up'); });
+  }
+
+  #controls() {
+    const bar = $('.controls', this.fig) || this.fig.insertBefore(Object.assign(document.createElement('div'), { className: 'controls' }), $('figcaption', this.fig));
+    bar.insertAdjacentHTML('afterbegin',
+      `<button class="btn" type="button" data-sc="replay" aria-label="Replay from the start">↺</button>
+       <button class="btn" type="button" data-sc="prev" aria-label="Previous beat">←</button>
+       <button class="btn" type="button" data-sc="play" aria-pressed="false">Play</button>
+       <button class="btn" type="button" data-sc="next" aria-label="Next beat">→</button>
+       <input class="scrub" type="range" min="0" max="100" value="0" aria-label="Timeline">`);
+    bar.insertAdjacentHTML('beforeend', '<div class="step-label" aria-live="polite"></div>');
+    const b = a => $(`[data-sc="${a}"]`, bar);
+    this.playBtn = b('play'); this.scrub = $('.scrub', bar); this.label = $('.step-label', bar);
+    b('replay').onclick = () => { this.stopAt = this.T; this.playFrom(0); };
+    this.playBtn.onclick = () => { if (this.playing) return this.pause(); this.stopAt = this.T; this.playFrom(this.t >= this.T - 1e-6 ? 0 : this.t); };
+    b('next').onclick = () => { this.pause(); this.next(); };
+    b('prev').onclick = () => this.prev();
+    this.scrub.oninput = () => { this.pause(); this.seek(this.scrub.value / 100); };
+    this.fig.tabIndex = -1;
+    this.fig.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select')) return;
+      if (e.key === 'ArrowRight') { this.pause(); this.next(); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { this.prev(); e.preventDefault(); }
+    });
+  }
+}
+
+/* ---- animations: each returns (scene, t0, dur, ease) => void ---- */
+const many = (o, f) => (Array.isArray(o) ? o : [o]).map(f);
+function to(o, props, from = {}) {
+  return many(o, oo => (sc, t0, dur, e) => {
+    for (const [k, v] of Object.entries(props)) {
+      const a = k in from ? from[k] : sc.valueAt(oo, k, t0);
+      const b = typeof v === 'function' ? v(a) : v;
+      sc.track(oo, k, t0, t0 + dur, p => mix(a, b, e(p)));
+    }
+  });
+}
+const fadeIn = o => to(o, { opacity: 1 });
+const fadeOut = o => to(o, { opacity: 0 });
+const create = o => many(o, oo => [to(oo, { opacity: 1 }, { opacity: 1 }), to(oo, { draw: 1 }, { draw: 0 })]);
+const uncreate = o => to(o, { draw: 0 });
+const indicate = o => many(o, oo => (sc, t0, dur) => sc.track(oo, 'glow', t0, t0 + dur, p => ease.there(p)));
+const set = (o, props) => many(o, oo => (sc, t0) => { for (const [k, v] of Object.entries(props)) sc.track(oo, k, t0, t0, () => v); });
+// Stagger: run anims one after another inside the beat, with overlap lag (0 = sequential, 1 = together).
+const lagged = (anims, lag = .25) => (sc, t0, dur, e) => {
+  const n = anims.length, d = dur / (1 + (n - 1) * lag);
+  anims.forEach((a, i) => [a].flat(Infinity).forEach(f => f(sc, t0 + i * lag * d, d, e)));
+};
+
+/* ---- objects: plain props + paint(ctx, state, scene) ---- */
+function partialPath(ctx, pts, frac) {
+  if (pts.length < 2) return;
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); L += l; }
+  let left = L * clamp01(frac);
+  ctx.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const f = Math.min(1, left / (segs[i - 1] || 1));
+    ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f);
+    left -= segs[i - 1];
+  }
+}
+function arrowHead(ctx, x1, y1, x2, y2, size) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - size * Math.cos(a - .42), y2 - size * Math.sin(a - .42));
+  ctx.lineTo(x2 - size * Math.cos(a + .42), y2 - size * Math.sin(a + .42));
+  ctx.closePath(); ctx.fill();
+}
+const stroke = (ctx, p) => { ctx.strokeStyle = paintColor(p.color); ctx.lineWidth = p.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; if (p.dash) ctx.setLineDash(p.dash); };
+
+const Dot = p => ({ r: 6, color: 'fg', ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.beginPath(); ctx.arc(S.X(s.x), S.Y(s.y), s.r * (1 + .35 * (s.glow || 0)), 0, 2 * Math.PI); ctx.fill();
+} });
+const Line = p => ({ color: 'fg', width: 2.5, draw: 1, arrow: false, ...p, paint(ctx, s, S) {
+  const [x1, y1, x2, y2] = [S.X(s.x1), S.Y(s.y1), S.X(s.x2), S.Y(s.y2)];
+  const ex = x1 + (x2 - x1) * s.draw, ey = y1 + (y2 - y1) * s.draw;
+  stroke(ctx, s); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  if (s.arrow && s.draw > .05) { ctx.setLineDash([]); ctx.fillStyle = paintColor(s.color); arrowHead(ctx, x1, y1, ex, ey, 8 + s.width * 2); }
+} });
+const Arrow = p => Line({ arrow: true, ...p });
+const Circle = p => ({ color: 'fg', width: 2, R: 1, draw: 1, start: Math.PI / 2, ccw: true, fill: null, ...p, paint(ctx, s, S) {
+  // start is a maths angle (counter-clockwise from +x); create() sweeps counter-clockwise unless ccw: false
+  const turn = 2 * Math.PI * s.draw * (s.ccw ? 1 : -1);
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.start, -s.start - turn, s.ccw);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+const Arc = p => ({ color: 'fg', width: 3, R: 1, a0: 0, a1: Math.PI, draw: 1, ...p, paint(ctx, s, S) {
+  const a1 = s.a0 + (s.a1 - s.a0) * s.draw;
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.a0, -a1, a1 > s.a0);
+  stroke(ctx, s); ctx.stroke();
+} });
+const Path = p => ({ color: 'fg', width: 2.5, draw: 1, closed: false, fill: null, ...p, paint(ctx, s, S) {
+  const pts = s.pts.map(([x, y]) => [S.X(x), S.Y(y)]);
+  if (s.closed) pts.push(pts[0]);
+  ctx.beginPath(); partialPath(ctx, pts, s.draw);
+  if (s.fill && s.draw >= 1) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+// A function graph. To morph into another function, give fn2 and tween m: to(g, { m: 1 }).
+const Graph = p => ({ color: 'blue', width: 3, draw: 1, x0: 0, x1: 1, n: 240, m: 0, fn2: null, ...p, paint(ctx, s, S) {
+  const f = s.fn2 && s.m > 0 ? x => s.fn(x) * (1 - s.m) + s.fn2(x) * s.m : s.fn;
+  const pts = []; for (let i = 0; i <= s.n; i++) { const x = s.x0 + (s.x1 - s.x0) * i / s.n; pts.push([S.X(x), S.Y(f(x))]); }
+  ctx.beginPath(); partialPath(ctx, pts, s.draw); stroke(ctx, s); ctx.stroke();
+} });
+const Rect = p => ({ color: 'fg', width: 1.5, fill: null, radius: 4, ...p, paint(ctx, s, S) {
+  const x = S.X(s.x), y = S.Y(s.y + s.h), w = s.w * S.sx, h = s.h * S.sy;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, s.radius);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  if (s.width) { stroke(ctx, s); ctx.stroke(); }
+} });
+// Text: either a fixed string, or fmt(value) so a number can count up with to(t, { value }).
+const Text = p => ({ color: 'fg', size: 15, font: 'sans', weight: 500, align: 'center', base: 'middle', dx: 0, dy: 0, ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.textAlign = s.align; ctx.textBaseline = s.base;
+  ctx.font = `${s.weight} ${s.size}px ${tok(s.font)}`;
+  ctx.fillText(s.fmt ? s.fmt(s.value) : s.text, S.X(s.x) + s.dx, S.Y(s.y) + s.dy);
+} });
+// TeX rendered by MathJax into an image, drawn on the canvas (cached per tex+colour+size).
+const texCache = new Map();
+const Tex = p => ({ color: 'fg', size: 18, align: 'center', ...p, paint(ctx, s, S) {
+  if (!window.MathJax?.tex2svg) return;
+  const colour = paintColor(s.color), key = s.tex + '|' + colour + '|' + s.size;
+  let img = texCache.get(key);
+  if (!img) {
+    const svg = MathJax.tex2svg(s.tex, { display: false }).querySelector('svg');
+    const ex = s.size * 0.45, w = parseFloat(svg.getAttribute('width')) * ex, h = parseFloat(svg.getAttribute('height')) * ex;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    const src = svg.outerHTML.replace(/currentColor/g, colour);
+    img = new Image(); img.w = w; img.h = h; img.onload = redrawAll;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+    texCache.set(key, img);
+  }
+  if (!img.complete) return;
+  const x = S.X(s.x) - (s.align === 'center' ? img.w / 2 : s.align === 'right' ? img.w : 0);
+  ctx.drawImage(img, x, S.Y(s.y) - img.h / 2, img.w, img.h);
+} });
+// Width in CSS px of a TeX string at a size (exact once MathJax is ready, estimated before).
+function texWidth(tex, size = 18) {
+  if (!window.MathJax?.tex2svg) return tex.replace(/\\[a-z]+|[{}]/g, 'x').length * size * .5;
+  return parseFloat(MathJax.tex2svg(tex, { display: false }).querySelector('svg').getAttribute('width')) * size * .45;
+}
+// Lay TeX pieces out left to right as separate objects, so each can move, fade or recolour on its own.
+// Returns the objects (not yet added). align: 'center' | 'left'; gap in px.
+function texRow(sc, pieces, { x = 0, y = 0, size = 22, gap = 7, align = 'center', ...rest } = {}) {
+  const ws = pieces.map(p => texWidth(typeof p === 'string' ? p : p.tex, size));
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (pieces.length - 1);
+  let px = sc.X(x) - (align === 'center' ? total / 2 : 0);
+  return pieces.map((p, i) => {
+    const o = Tex({ size, ...rest, ...(typeof p === 'string' ? { tex: p } : p), x: (px - sc.ox) / sc.sx, y, align: 'left' });
+    px += ws[i] + gap; return o;
+  });
+}
+
+// Axes with ticks; returns its parts so they can be created together: sc.addAll(Axes({...})).
+function Axes({ x = [0, 10], y = [0, 6], step = [1, 1], color = 'muted', labels = true, opacity = 1 } = {}) {
+  const parts = [Arrow({ x1: x[0], y1: 0, x2: x[1], y2: 0, color, width: 1.5, opacity }), Arrow({ x1: 0, y1: y[0], x2: 0, y2: y[1], color, width: 1.5, opacity })];
+  if (labels) {
+    for (let v = Math.ceil(x[0] / step[0]) * step[0]; v < x[1]; v += step[0]) if (v) parts.push(Text({ x: v, y: 0, dy: 14, text: String(+v.toFixed(6)), size: 12, color, opacity }));
+    for (let v = Math.ceil(y[0] / step[1]) * step[1]; v < y[1]; v += step[1]) if (v) parts.push(Text({ x: 0, y: v, dx: -10, align: 'right', text: String(+v.toFixed(6)), size: 12, color, opacity }));
+  }
+  return parts;
+}
+// Any custom object: Shape({ ...props, paint(ctx, s, S) { … } }) — all numeric props tween.
+const Shape = p => p;
+
+// MathJax loads after the page: redraw scenes that contain TeX once it is ready.
+// Rebuilding (not just redrawing) lets texRow() measure real glyph widths.
+addEventListener('load', () => window.MathJax?.startup?.promise?.then(() => Scene.all.forEach(s => s.rebuild())));
+// Prose ↔ figure link: <span data-focus="fig-id:tag"> dims everything in that figure except objects tagged `tag`.
+document.addEventListener('pointerover', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('pointerout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('focusout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+
+
+// Text on a small background plate, for labels that sit over lines (call after setting ctx.font and fillStyle).
+function plateText(ctx, text, x, y, align = 'left', pad = 3) {
+  const w = ctx.measureText(text).width, h = parseInt(ctx.font.match(/(\d+)px/)[1]) + 2;
+  const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  const fill = ctx.fillStyle; ctx.fillStyle = tok('bg-2'); ctx.fillRect(x0 - pad, y - h / 2 - 1, w + 2 * pad, h + 2); ctx.fillStyle = fill;
+  ctx.textAlign = align; ctx.fillText(text, x, y);
+}
+
+/* ---------- page chrome: contents rail + reading progress ---------- */
+(() => {
+  const heads = $$('main h2[id]');
+  const list = $('.toc ol');
+  heads.forEach(h => { const li = document.createElement('li'); li.innerHTML = `<a href="#${h.id}">${h.textContent.replace(/^\d+/, m => m + ' ')}</a>`; list.append(li); });
+  const links = $$('.toc a');
+  const bar = $('.progress');
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (max > 0 ? 100 * scrollY / max : 0) + '%';
+    let cur = 0; heads.forEach((h, k) => { if (h.getBoundingClientRect().top < innerHeight * 0.35) cur = k; });
+    links.forEach((a, k) => a.setAttribute('aria-current', k === cur));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+
+/* ================= shared: SHA-256 (synchronous, for the toy values) ================= */
+const sha256 = (() => {
+  const K = new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  return str => {
+    const msg = new TextEncoder().encode(str), L = msg.length;
+    const len = ((L + 9 + 63) >> 6) << 6, b = new Uint8Array(len);
+    b.set(msg); b[L] = 0x80;
+    new DataView(b.buffer).setUint32(len - 4, L * 8);
+    const h = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+    const w = new Uint32Array(64), dv = new DataView(b.buffer);
+    for (let o = 0; o < len; o += 64) {
+      for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + 4 * i);
+      for (let i = 16; i < 64; i++) {
+        const s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >>> 3), s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >>> 10);
+        w[i] = w[i-16] + s0 + w[i-7] + s1;
+      }
+      let [a, bb, c, d, e, f, g, hh] = h;
+      for (let i = 0; i < 64; i++) {
+        const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+        const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & bb) ^ (a & c) ^ (bb & c))) | 0;
+        hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = bb; bb = a; a = (t1 + t2) | 0;
+      }
+      [a, bb, c, d, e, f, g, hh].forEach((v, i) => h[i] = (h[i] + v) | 0);
+    }
+    return [...h].map(v => v.toString(16).padStart(8, '0')).join('');
+  };
+})();
+
+// Size unit for px-based drawing: one vocabulary across figures.
+const unit = S => Math.max(.62, Math.min(1, S.w / 780));
+const font = (ctx, px, fam = 'sans', wt = 500) => { ctx.font = `${wt} ${px}px ${tok(fam)}`; };
+
+// A labelled node: circle with a label inside and an optional caption under (or beside) it.
+const Node = p => ({ color: 'fg', label: '', sub: '', subColor: 'muted', r: 24, side: 'below', fill: 'bg-3', ...p, paint(ctx, s, S) {
+  const u = unit(S), r = s.r * u * (1 + .14 * (s.glow || 0)), X = S.X(s.x), Y = S.Y(s.y);
+  ctx.beginPath(); ctx.arc(X, Y, r, 0, 2 * Math.PI);
+  ctx.fillStyle = paintColor(s.fill); ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = paintColor(s.color); ctx.stroke();
+  ctx.fillStyle = paintColor(s.color); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  font(ctx, Math.max(13, 17 * u), 'serif', 600); ctx.fillText(s.label, X, Y + 1);
+  if (s.sub) {
+    font(ctx, Math.max(12, 13 * u), 'mono', 500); ctx.fillStyle = paintColor(s.subColor);
+    if (s.side === 'below') ctx.fillText(s.sub, X, Y + r + 14 * u + 2);
+    else { ctx.textAlign = 'left'; ctx.fillText(s.sub, X + r + 10, Y); }
+  }
+} });
+// Paint lines and paths underneath nodes and dots (sort is stable, so the rest keeps its order).
+const linesFirst = sc => sc.objs.sort((a, b) => ('x1' in b || 'pts' in b) - ('x1' in a || 'pts' in a));
+// A free label in px offsets from a world point.
+const Label = p => Text({ size: 14, color: 'fg-2', ...p });
+
+/* ================= Figure 1: a hash chain signs a digit ================= */
+(() => {
+  const hex = [sha256('sk:0')];
+  for (let i = 0; i < 3; i++) hex.push(sha256(hex[i]));
+  const opts = n => n ? { x: [0, 10], y: [0, 10.2], pad: 16 } : { x: [0, 10], y: [.3, 4], pad: 18 };
+  new Scene('#fig-chain', opts, sc => {
+    const n = sc.narrow;
+    const P = i => n ? [4.4, 1.1 + i * 2.75] : [1.1 + i * 2.6, 2.75];
+    const side = n ? 'right' : 'below';
+    const nodes = [0, 1, 2, 3].map(i => sc.add(Node({ x: P(i)[0], y: P(i)[1], label: `x${'₀₁₂₃'[i]}`, sub: hex[i].slice(0, 4) + '…', side,
+      color: i === 0 ? 'red' : i === 3 ? 'blue' : 'fg-2', opacity: 0, tag: i === 0 ? 'secret' : i === 3 ? 'top' : '' })));
+    const gap = n ? .62 : .5;
+    const arrows = [0, 1, 2].map(i => sc.add(Arrow({
+      x1: P(i)[0] + (n ? 0 : gap), y1: P(i)[1] + (n ? gap : 0), x2: P(i + 1)[0] - (n ? 0 : gap), y2: P(i + 1)[1] - (n ? gap : 0),
+      color: 'muted', width: 2, draw: 0 })));
+    const hs = [0, 1, 2].map(i => sc.add(Label({ x: (P(i)[0] + P(i + 1)[0]) / 2, y: (P(i)[1] + P(i + 1)[1]) / 2, dx: n ? 16 : 0, dy: n ? 0 : -14, text: 'H', font: 'serif', size: 16, color: 'muted', opacity: 0 })));
+    const tagAt = (i, text, color, extra = {}) => sc.add(Label({ x: P(i)[0], y: P(i)[1], dx: n ? 96 : 0, dy: n ? 0 : -40, text, color, opacity: 0, align: n ? 'left' : 'center', size: n ? 13 : 14, ...extra }));
+    const tag0 = tagAt(0, 'secret', 'red', { tag: 'secret' });
+    const tag3 = tagAt(3, 'public top', 'blue', { tag: 'top', dy: n ? -10 : -40 });
+    const sigTag = tagAt(2, n ? 'signs d = 2' : 'signature of d = 2', 'yellow');
+    const forge = tagAt(3, 'forged: d = 3', 'red', { weight: 700, dy: n ? 10 : -62 });
+    // A curved arrow between nodes i and j, bulging below (wide) or to the left (narrow), with a label at the bulge.
+    const bend = (i, j, color, dash, text) => sc.add(Shape({ opacity: 0, draw: 0, paint(ctx, s, S) {
+      const u = unit(S), a = P(i), b = P(j), off = n ? 30 * u : 48 * u, bulge = n ? 46 : 40;
+      const [dx, dy] = n ? [-1, 0] : [0, 1];
+      const x0 = S.X(a[0]) + dx * off, y0 = S.Y(a[1]) + dy * off, x1 = S.X(b[0]) + dx * off, y1 = S.Y(b[1]) + dy * off;
+      const cx = (x0 + x1) / 2 + dx * bulge, cy = (y0 + y1) / 2 + dy * bulge;
+      ctx.globalAlpha *= s.draw; ctx.strokeStyle = paintColor(color); ctx.lineWidth = 2.6; ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(cx, cy, x1, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = paintColor(color); font(ctx, Math.max(12, 13 * u), 'sans', 700);
+      ctx.textAlign = n ? 'right' : 'center'; ctx.textBaseline = n ? 'middle' : 'top';
+      ctx.fillText(text, n ? (x0 + x1) / 2 - bulge / 2 - 8 : (x0 + x1) / 2, n ? (y0 + y1) / 2 : (y0 + y1) / 2 + bulge / 2 + 6);
+    } }));
+    const verify = bend(2, 3, 'green', [], n ? 'H(x₂) = x₃ ✓' : 'verifier: H(x₂) = x₃ ✓');
+    const back = bend(2, 1, 'red', [6, 6], '✗ H⁻¹');
+
+    sc.play(`Pick a random secret x₀ = ${hex[0].slice(0, 4)}…`, [fadeIn([nodes[0], tag0]), indicate(nodes[0])], .9);
+    sc.play(`Hash it three times: x₁ = ${hex[1].slice(0, 4)}…, x₂ = ${hex[2].slice(0, 4)}…, x₃ = ${hex[3].slice(0, 4)}…. The top x₃ is public.`,
+      [lagged([0, 1, 2].map(i => [create(arrows[i]), fadeIn(hs[i]), fadeIn(nodes[i + 1])]), .55), fadeIn(tag3)], 2.2);
+    sc.play('To sign the digit d = 2, reveal x₂.', [to(nodes[2], { color: 'yellow' }), indicate(nodes[2]), fadeIn(sigTag)], 1);
+    sc.play('The verifier hashes x₂ once more and compares with the public top. It matches.', [to(verify, { opacity: 1, draw: 1 })], 1.1);
+    sc.play('A forger can hash x₂ too, and x₃ is a valid signature of d = 3: a chain lets anyone raise a digit.', [fadeIn(forge), to(nodes[3], { color: 'red' }), indicate(nodes[3])], 1.1);
+    sc.play('Lowering a digit means finding x₁ from x₂, which is inverting H. Nobody can.', [to(back, { opacity: 1, draw: 1 }), to(nodes[3], { color: 'blue' })], 1);
+  });
+})();
+
+/* ================= Figure 2: WOTS+C counter search ================= */
+(() => {
+  const fig = $('#fig-wotsc'), svg = $('svg', fig), out = $('.readout', fig), input = $('#wc-c');
+  const TARGET = 6, M = 'hello';
+  const digitsOf = c => { const h = sha256(`${M}:${c}`), x = parseInt(h.slice(0, 2), 16); return { h, d: [(x >> 6) & 3, (x >> 4) & 3, (x >> 2) & 3, x & 3] }; };
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, style = {}) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); Object.assign(e.style, style); svg.append(e); return e; };
+  const draw = c => {
+    const narrow = svg.clientWidth > 0 && svg.clientWidth < 560;
+    svg.setAttribute('viewBox', narrow ? '0 0 360 440' : '0 0 640 300'); svg.replaceChildren();
+    const { h, d } = digitsOf(c), sum = d.reduce((a, b) => a + b, 0), ok = sum === TARGET;
+    const xs = narrow ? [45, 125, 205, 285] : [70, 165, 260, 355], ys = [250, 190, 130, 70];
+    xs.forEach((x, i) => {
+      for (let p = 0; p < 3; p++) el('line', { x1: x, y1: ys[p] - 15, x2: x, y2: ys[p + 1] + 15, 'stroke-width': 2 }, { stroke: p >= d[i] && ok ? 'var(--green)' : 'var(--muted)', opacity: ok ? 1 : .35 });
+      for (let p = 0; p < 4; p++) {
+        const revealed = p === d[i], above = p > d[i];
+        const col = !ok ? 'var(--muted)' : revealed ? 'var(--yellow)' : above ? 'var(--green)' : 'var(--red)';
+        el('circle', { cx: x, cy: ys[p], r: revealed ? 14 : 11, 'stroke-width': p === 3 ? 3 : 2 },
+          { fill: revealed && ok ? 'var(--yellow)' : 'var(--bg-3)', stroke: p === 3 && ok ? 'var(--blue)' : col, opacity: ok || revealed ? 1 : .5 });
+      }
+      const t = el('text', { x, y: 290, 'text-anchor': 'middle' }, { font: '600 15px var(--mono)', fill: 'var(--yellow)' });
+      t.textContent = `d${'₁₂₃₄'[i]} = ${d[i]}`;
+    });
+    const lab = (x, y, s, col, wt = 500, sz = 14) => { const t = el('text', { x, y }, { font: `${wt} ${sz}px var(--sans)`, fill: col }); t.textContent = s; return t; };
+    const [px, py] = narrow ? [20, 335] : [440, 140];
+    lab(px, py, `sum = ${d.join(' + ')} = ${sum}`, 'var(--fg)', 600, 15);
+    lab(px, py + 28, ok ? `= ${TARGET}: accept, sign with c = ${c}` : `≠ ${TARGET}: try the next counter`, ok ? 'var(--green)' : 'var(--red)', 600, 14);
+    if (ok) [['yellow: revealed', 'yellow'], ['green: verifier hashes', 'green'], ['red: stays secret', 'red'], ['blue ring: public tops', 'blue']].forEach(([t, c], i) =>
+      lab(narrow ? px + (i % 2) * 165 : px, narrow ? py + 66 + (i >> 1) * 24 : py + 70 + i * 22, t, `var(--${c})`));
+    out.textContent = `H("${M}:${c}") = ${h.slice(0, 8)}…  first byte → digits ${d.join(',')}`;
+  };
+  range(input, draw);
+  new ResizeObserver(() => draw(+input.value)).observe(svg);
+  $('#wc-next').onclick = () => {
+    let c = +input.value;
+    do { c = (c + 1) % 20; } while (digitsOf(c).d.reduce((a, b) => a + b, 0) !== TARGET);
+    input.value = c; input.dispatchEvent(new Event('input'));
+  };
+})();
+
+/* ================= Figure 3: Merkle tree of WOTS keys ================= */
+(() => {
+  const opts = n => n ? { x: [0, 16], y: [-.4, 7.6], pad: 14 } : { x: [0, 16], y: [-.2, 7.4], pad: 16 };
+  new Scene('#fig-merkle', opts, sc => {
+    // x of node (level l, index i) = mean of its leaves' x = 1 + 2i·2^l + (2^l − 1)
+    const X = (l, i) => 1 + 2 * i * 2 ** l + (2 ** l - 1);
+    const Y = l => .9 + l * 2;
+    const r = sc.narrow ? 13 : 18;
+    const nodes = [], edges = [];
+    for (let l = 0; l <= 3; l++) {
+      nodes[l] = [];
+      for (let i = 0; i < 8 >> l; i++) {
+        nodes[l][i] = sc.add(Node({ x: X(l, i), y: Y(l), r, label: l === 0 ? String(i) : l === 3 ? 'pk' : '', color: l === 0 ? 'teal' : l === 3 ? 'blue' : 'fg-2', opacity: 0, fill: 'bg-3' }));
+        if (l > 0) for (const c of [2 * i, 2 * i + 1]) edges.push({ l, e: sc.add(Line({ x1: X(l - 1, c), y1: Y(l - 1) + .3, x2: X(l, i), y2: Y(l) - .3, color: 'rule', width: 2, draw: 0 })) });
+      }
+    }
+    const leaf = 5, sib = [nodes[0][4], nodes[1][3], nodes[2][0]], climb = [nodes[0][5], nodes[1][2], nodes[2][1], nodes[3][0]];
+    const sibLab = sc.add(Label({ x: .1, y: sc.narrow ? -.1 : 6.4, align: 'left', text: 'path: leaf 4, node 6–7, node 0–3', color: 'purple', opacity: 0, size: sc.narrow ? 12 : 14 }));
+    const climbEdges = [edges.find(o => o.l === 1 && o.e.x1 === X(0, 5)), edges.find(o => o.l === 2 && o.e.x1 === X(1, 2)), edges.find(o => o.l === 3 && o.e.x1 === X(2, 1))].map(o => o.e);
+    linesFirst(sc);
+    sc.play('Eight WOTS public keys. Each leaf is the hash of one key\'s chain tops.', [lagged(nodes[0].map(fadeIn), .3)], 1.1);
+    sc.play('Hash neighbours in pairs: 8 leaves give 4 nodes.', [create(edges.filter(o => o.l === 1).map(o => o.e)), lagged(nodes[1].map(fadeIn), .3)], 1);
+    sc.play('Then 2 nodes, then 1.', [create(edges.filter(o => o.l > 1).map(o => o.e)), lagged([...nodes[2], nodes[3][0]].map(fadeIn), .4)], 1.1);
+    sc.play('The root, with a 16-byte public parameter, is the 32-byte public key, whatever the number of leaves.', [indicate(nodes[3][0])], .9);
+    sc.play('To sign, use leaf 5. Its WOTS key signs the message.', [to(nodes[0][5], { color: 'yellow' }), indicate(nodes[0][5])], .9);
+    sc.play('The authentication path is the sibling on each level: leaf 4, node 6–7, node 0–3. Three nodes for h = 3.', [lagged(sib.map(o => [to(o, { color: 'purple' }), indicate(o)]), .5), fadeIn(sibLab)], 1.4);
+    sc.play('The verifier rebuilds leaf 5 from the WOTS signature and hashes up with the siblings. Reaching the root accepts.',
+      [lagged(climbEdges.map((e, i) => [to(e, { color: 'green', width: 3.5 }), to(climb[i + 1], { color: 'green' })]), .5)], 1.6);
+  });
+})();
+
+/* ================= Figure 4: random leaves collide (birthday) ================= */
+(() => {
+  const fig = $('#fig-birthday'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const mulberry32 = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const rnd = mulberry32(2026), seq = Array.from({ length: 96 }, () => Math.floor(rnd() * 64));
+  let N = 24;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const cnt = new Array(64).fill(0); seq.slice(0, N).forEach(i => cnt[i]++);
+    const left = 16, right = w - 16, base = h - 34, step = (right - left) / 64, rr = Math.max(2.2, Math.min(5, step * .38));
+    ctx.strokeStyle = tok('rule'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(left, base + 6); ctx.lineTo(right, base + 6); ctx.stroke();
+    for (let i = 0; i < 64; i++) {
+      const x = left + step * (i + .5);
+      ctx.fillStyle = tok('teal'); ctx.fillRect(x - step * .3, base + 9, step * .6, 6);
+      for (let k = 0; k < cnt[i]; k++) {
+        ctx.fillStyle = tok(cnt[i] > 1 ? 'red' : 'yellow');
+        ctx.beginPath(); ctx.arc(x, base - rr - k * (2 * rr + 2), rr, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+    font(ctx, 12, 'sans'); ctx.fillStyle = tok('muted'); ctx.textAlign = 'left'; ctx.fillText('64 leaves', left, h - 6);
+    ctx.textAlign = 'right'; ctx.fillStyle = tok('red'); ctx.fillText('red: leaf signed more than once', right, h - 6);
+    let p = 1; for (let i = 0; i < N; i++) p *= 1 - i / 64;
+    const reused = cnt.filter(c => c > 1).length;
+    out.textContent = `${N} signatures · ${reused} ${reused === 1 ? 'leaf' : 'leaves'} reused · P(some reuse) = ${(100 * (1 - p)).toFixed(1)}%`;
+  });
+  range($('#bd-n'), v => { N = v; paint(); });
+})();
+
+/* ================= Figure 5: FORS ================= */
+(() => {
+  const dig = sha256('fors:hello'), v = parseInt(dig.slice(0, 4), 16) >> 7;
+  const idx = [(v >> 6) & 7, (v >> 3) & 7, v & 7];
+  const bits = idx.map(i => i.toString(2).padStart(3, '0'));
+  const opts = n => n ? { x: [0, 29], y: [-2.2, 11.6], pad: 10 } : { x: [0, 29], y: [-1.4, 10.2], pad: 16 };
+  new Scene('#fig-fors', opts, sc => {
+    const n = sc.narrow, r = n ? 5 : 9;
+    const X = (j, l, i) => 1 + 10 * j + i * 2 ** l + (2 ** l - 1) / 2, Y = l => 1 + l * 2;
+    const trees = [], edges = [], allEdges = [];
+    for (let j = 0; j < 3; j++) {
+      trees[j] = []; edges[j] = [];
+      for (let l = 0; l <= 3; l++) {
+        trees[j][l] = [];
+        for (let i = 0; i < 8 >> l; i++) {
+          trees[j][l][i] = sc.add(Dot({ x: X(j, l, i), y: Y(l), r: l === 0 ? r : r * .8, color: l === 3 ? 'orange' : l === 0 ? 'fg-2' : 'muted', opacity: 0 }));
+          if (l) for (const c of [2 * i, 2 * i + 1]) { const e = sc.add(Line({ x1: X(j, l - 1, c), y1: Y(l - 1), x2: X(j, l, i), y2: Y(l), color: 'rule', width: 1.6, draw: 0 })); edges[j].push({ l, c, e }); allEdges.push(e); }
+        }
+      }
+    }
+    const pk = sc.add(Node({ x: 14.5, y: 9.4, r: n ? 15 : 20, label: 'pk', color: 'orange', opacity: 0, sub: 'FORS public key', side: 'right' }));
+    const pkLines = [0, 1, 2].map(j => sc.add(Line({ x1: X(j, 3, 0), y1: Y(3), x2: 14.5, y2: 9.4, color: 'rule', width: 2, draw: 0 })));
+    const head = sc.add(Label({ x: .5, y: n ? 11 : 9.4, align: 'left', font: 'mono', size: n ? 12 : 14, color: 'yellow', text: `H(R‖hello) = ${dig.slice(0, 8)}…`, opacity: 0 }));
+    const idxLabs = [0, 1, 2].map(j => sc.add(Label({ x: X(j, 3, 0), y: n ? -1.4 : -.6, font: 'mono', size: n ? 12 : 14, color: 'yellow', text: n ? `${bits[j]}→${idx[j]}` : `${bits[j]} → leaf ${idx[j]}`, opacity: 0 })));
+    const chosen = idx.map((i, j) => trees[j][0][i]);
+    const sibs = idx.map((i, j) => [trees[j][0][i ^ 1], trees[j][1][(i >> 1) ^ 1], trees[j][2][(i >> 2) ^ 1]]).flat();
+    const climbE = idx.map((i, j) => [0, 1, 2].map(l => edges[j].find(o => o.l === l + 1 && o.c === (i >> l)).e)).flat();
+    const climbN = idx.map((i, j) => [trees[j][1][i >> 1], trees[j][2][i >> 2]]).flat();
+    linesFirst(sc);
+    sc.play('FORS with k = 3 trees of height a = 3: 8 secret leaves each, 24 in all.', [lagged(trees.map(t => [t.flat().map(fadeIn)]), .4), create(allEdges)], 1.4);
+    sc.play(`Hash R with the message: ${dig.slice(0, 4)}… starts with the bits ${bits.join(' ')}, three indices: ${idx.join(', ')}.`, [fadeIn(head), lagged(idxLabs.map(fadeIn), .4)], 1.3);
+    sc.play(`Reveal secret ${idx[0]} of tree 1, secret ${idx[1]} of tree 2, secret ${idx[2]} of tree 3.`, [to(chosen, { color: 'red', r: r * 1.3 }), indicate(chosen)], 1);
+    sc.play('Add each secret\'s authentication path: 3 siblings per tree.', [to(sibs, { color: 'purple' }), indicate(sibs)], 1);
+    sc.play('The verifier hashes each secret up to its tree\'s root, then hashes the three roots into the FORS public key.',
+      [to(climbE, { color: 'green', width: 3 }), to(climbN, { color: 'green' }), create(pkLines), fadeIn(pk)], 1.6);
+    sc.play('Nothing else leaks: 21 of the 24 secrets stay hidden after one signature.', [indicate(pk)], .8);
+  });
+})();
+
+/* ================= Figure 6: security vs number of signatures ================= */
+(() => {
+  const fig = $('#fig-life'), canvas = $('canvas', fig), out = $('.readout', fig), input = $('#lf-n');
+  const K = 24, A = 10, H = 26;
+  const lnFact = r => r < 2 ? 0 : r < 30 ? (() => { let s = 0; for (let i = 2; i <= r; i++) s += Math.log(i); return s; })()
+    : r * Math.log(r) - r + .5 * Math.log(2 * Math.PI * r) + 1 / (12 * r) - 1 / (360 * r ** 3);
+  // Expected forgery probability per query: E_r[(1 − (1 − 2^−a)^r)^k], r ~ Poisson(N / 2^b), times 2^(b − h).
+  const bitsAt = (log2N, b) => {
+    const lam = 2 ** (log2N - b), sd = Math.sqrt(lam);
+    const r0 = Math.max(0, Math.floor(lam - 12 * sd - 5)), r1 = Math.ceil(lam + 12 * sd + 60);
+    let E = 0; const q = Math.log1p(-(2 ** -A));
+    for (let r = r0; r <= r1; r++) { const pm = Math.exp(-lam + r * Math.log(lam) - lnFact(r)); E += pm * (-Math.expm1(r * q)) ** K; }
+    return -Math.log2(E) + (H - b);
+  };
+  const curves = [{ b: 26, col: 'blue', name: 'full tree' }, { b: 20, col: 'purple', name: 'b = 20' }, { b: 13, col: 'orange', name: 'b = 13' }];
+  const X0 = 12, X1 = 34, Y1 = 260;
+  curves.forEach(c => {
+    c.pts = []; for (let x = X0; x <= X1 + 1e-9; x += .1) c.pts.push([x, bitsAt(x, c.b)]);
+    let lo = X0, hi = X1; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; bitsAt(m, c.b) >= 127 ? lo = m : hi = m; } c.life = lo;
+  });
+  const fmtN = l2 => { const v = 2 ** l2; return v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : Math.round(v); };
+  let cur = 30;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, L = narrow ? 40 : 52, R = w - (narrow ? 14 : 24), T = 20, B = h - (narrow ? 64 : 58);
+    const px = x => L + (x - X0) / (X1 - X0) * (R - L), py = y => B - Math.min(Y1, Math.max(0, y)) / Y1 * (B - T);
+    font(ctx, 12, 'mono'); ctx.lineWidth = 1;
+    for (let y = 0; y <= 250; y += 50) { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(L, py(y)); ctx.lineTo(R, py(y)); ctx.stroke(); ctx.fillStyle = tok('muted'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(y, L - 6, py(y)); }
+    for (let x = X0; x <= X1; x += narrow ? 4 : 2) { ctx.fillStyle = tok('muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('2' + String(x).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''), px(x), B + 6); }
+    font(ctx, 12, 'sans'); ctx.fillStyle = tok('muted'); ctx.textAlign = 'center'; ctx.fillText('signatures N (log scale)', (L + R) / 2, B + 24);
+    if (narrow) { ctx.textAlign = 'left'; ctx.fillText('bits', 4, T - 8); }
+    else { ctx.save(); ctx.translate(12, (T + B) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('security (bits)', 0, 0); ctx.restore(); }
+    ctx.strokeStyle = tok('red'); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, py(127)); ctx.lineTo(R, py(127)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = tok('red'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('127 bits', R, py(127) - 3);
+    curves.forEach(c => {
+      ctx.strokeStyle = tok(c.col); ctx.lineWidth = 2.6; ctx.beginPath(); c.pts.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y))); ctx.stroke();
+      ctx.fillStyle = tok(c.col); ctx.beginPath(); ctx.arc(px(c.life), py(127), 5, 0, 2 * Math.PI); ctx.fill();
+      font(ctx, 12, 'sans', 600); ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillText(`${c.name}: ${fmtN(c.life)}`, px(c.life) - 6, py(127) + 7 + (narrow ? { 13: 0, 20: 17, 26: 34 }[c.b] : 0));
+    });
+    ctx.strokeStyle = tok('yellow'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px(cur), T); ctx.lineTo(px(cur), B); ctx.stroke();
+    const vals = curves.map(c => { const y = bitsAt(cur, c.b); ctx.fillStyle = tok(c.col); ctx.beginPath(); ctx.arc(px(cur), py(y), 4.5, 0, 2 * Math.PI); ctx.fill(); return y; });
+    out.textContent = `N = 2^${cur} ≈ ${fmtN(cur)} · bits: full ${vals[0].toFixed(1)}, b=20 ${vals[1].toFixed(1)}, b=13 ${vals[2].toFixed(1)}`;
+  });
+  range(input, v => { cur = v; paint(); }, v => v % 1 ? v.toFixed(2) : v);
+})();
+
+/* ================= Figure 7: the whole leanSphincs signature ================= */
+(() => {
+  const opts = n => n ? { x: [0, 10], y: [0, 15.8], pad: 12 } : { x: [0, 20], y: [0, 10], pad: 16 };
+  new Scene('#fig-whole', opts, sc => {
+    const n = sc.narrow;
+    const G = n ? { C: 5, fors: { x0: .6, x1: 9.4, rows: [4.7, 3.4], h: .95 }, pk: [5, 6.0], wots: { x0: .9, x1: 9.1, rows: [8.1, 7.1], h: .75 }, leaf: [5, 9.4],
+                    tri: { l: .5, r: 9.5, b: 9.4, apex: [5, 15.3] }, msg: [.9, 6.0], R: [2.3, 6.0], ctr: [.2, 1.75], brk: [.2, 1.0] }
+                 : { C: 12, fors: { x0: 4.2, x1: 19.6, rows: [1.0], h: 1.3 }, pk: [12, 3.0], wots: { x0: 5.5, x1: 18.5, rows: [3.8], h: 1.3 }, leaf: [12, 6.0],
+                    tri: { l: 3.4, r: 19.6, b: 6.0, apex: [11.5, 9.7] }, msg: [1.4, 1.6], R: [1.4, 3.0], ctr: [.2, 9.5], brk: [.2, 8.7] };
+    const u = n ? .8 : 1;
+    // Public tree: a tall triangle with its root.
+    const tri = sc.add(Path({ pts: [[G.tri.l, G.tri.b], [G.tri.r, G.tri.b], G.tri.apex], closed: true, color: 'rule', width: 2, draw: 0, fill: null }));
+    const root = sc.add(Node({ x: G.tri.apex[0], y: G.tri.apex[1], r: 17, label: 'pk', color: 'blue', opacity: 0 }));
+    const hLab = sc.add(Label({ x: G.tri.r, y: G.tri.b, dx: -6, dy: -14, align: 'right', text: 'h = 26: 2²⁶ leaves', size: 13, color: 'muted', opacity: 0 }));
+    const msg = sc.add(Node({ x: G.msg[0], y: G.msg[1], r: 17, label: 'm', color: 'yellow', opacity: 0 }));
+    const Rn = sc.add(Node({ x: G.R[0], y: G.R[1], r: 17, label: 'R', color: 'fg', opacity: 0 }));
+    // FORS: 24 small trees.
+    const forsTrees = [];
+    G.fors.rows.forEach((y, ri) => {
+      const per = 24 / G.fors.rows.length, wd = (G.fors.x1 - G.fors.x0) / per;
+      for (let i = 0; i < per; i++) {
+        const cx = G.fors.x0 + wd * (i + .5);
+        forsTrees.push(sc.add(Path({ pts: [[cx - wd * .38, y - G.fors.h / 2], [cx + wd * .38, y - G.fors.h / 2], [cx, y + G.fors.h / 2]], closed: true, color: 'orange', width: 1.6, draw: 0 })));
+      }
+    });
+    const forsLab = sc.add(Label({ x: G.fors.x1, y: G.fors.rows.at(-1) - G.fors.h / 2, dy: 12, align: 'right', text: 'FORS: 24 trees of height 10', size: 13, color: 'orange', opacity: 0 }));
+    const fpk = sc.add(Node({ x: G.pk[0], y: G.pk[1], r: 14, label: '', color: 'orange', opacity: 0, sub: 'FORS pk', side: 'right' }));
+    // WOTS+C: 64 short chains.
+    const chains = [];
+    G.wots.rows.forEach(y => {
+      const per = 64 / G.wots.rows.length, wd = (G.wots.x1 - G.wots.x0) / per;
+      for (let i = 0; i < per; i++) chains.push(sc.add(Line({ x1: G.wots.x0 + wd * (i + .5), y1: y - G.wots.h / 2, x2: G.wots.x0 + wd * (i + .5), y2: y + G.wots.h / 2, color: 'teal', width: 2, draw: 0 })));
+    });
+    const wotsLab = sc.add(Label({ x: G.wots.x1, y: G.wots.rows[0] + G.wots.h / 2, dy: -10, align: 'right', text: 'WOTS+C: 64 chains', size: 13, color: 'teal', opacity: 0 }));
+    const leaf = sc.add(Dot({ x: G.leaf[0], y: G.leaf[1], r: 8, color: 'teal', opacity: 0 }));
+    // Authentication path: 26 nodes zig-zagging up to the root.
+    const pathPts = []; for (let i = 0; i <= 26; i++) { const t = i / 26, s = (1 - t) * .55 * (i % 2 ? 1 : -1) * (i && i < 26 ? 1 : 0);
+      pathPts.push([G.leaf[0] + (G.tri.apex[0] - G.leaf[0]) * t + s, G.leaf[1] + (G.tri.apex[1] - G.leaf[1]) * t]); }
+    const path = sc.add(Path({ pts: pathPts, color: 'purple', width: 2.4, draw: 0 }));
+    const pathDots = sc.add(Shape({ opacity: 0, paint(ctx, s, S) { ctx.fillStyle = paintColor('purple'); pathPts.slice(1, 26).forEach(([x, y]) => { ctx.beginPath(); ctx.arc(S.X(x), S.Y(y), 3, 0, 2 * Math.PI); ctx.fill(); }); } }));
+    const toLeaf = sc.add(Arrow({ x1: G.msg[0] + .5, y1: G.msg[1] + .3, x2: G.leaf[0] - .4, y2: G.leaf[1] - .1, color: 'yellow', width: 1.6, dash: [5, 5], draw: 0 }));
+    const toFors = sc.add(Arrow({ x1: G.msg[0] + .5, y1: G.msg[1] - .2, x2: G.fors.x0 + .1, y2: G.fors.rows[0] + (n ? .3 : .2), color: 'yellow', width: 1.6, dash: [5, 5], draw: 0 }));
+    const forsUp = sc.add(Shape({ draw: 0, opacity: 0, paint(ctx, s, S) { ctx.strokeStyle = paintColor('green'); ctx.lineWidth = 1.2; ctx.globalAlpha *= s.draw;
+      forsTrees.forEach(t => { const top = S.cur.get(t).pts[2]; ctx.beginPath(); ctx.moveTo(S.X(top[0]), S.Y(top[1])); ctx.lineTo(S.X(G.pk[0]), S.Y(G.pk[1])); ctx.stroke(); }); } }));
+    const wotsUp = sc.add(Shape({ draw: 0, opacity: 0, paint(ctx, s, S) { ctx.strokeStyle = paintColor('green'); ctx.lineWidth = 1; ctx.globalAlpha *= s.draw * .8;
+      chains.filter((_, i) => i % 4 === 0).forEach(c => { const p = S.cur.get(c); ctx.beginPath(); ctx.moveTo(S.X(p.x2), S.Y(p.y2)); ctx.lineTo(S.X(G.leaf[0]), S.Y(G.leaf[1])); ctx.stroke(); }); } }));
+    const pkToWots = sc.add(Arrow({ x1: G.pk[0], y1: G.pk[1] + .25, x2: G.pk[0], y2: G.wots.rows.at(-1) - G.wots.h / 2 - .1, color: 'orange', width: 2, draw: 0 }));
+    // Byte counter and breakdown.
+    const fs = n ? 15 : 17;
+    const ctr = sc.add(Text({ x: G.ctr[0], y: G.ctr[1], align: 'left', font: 'mono', size: fs, weight: 600, color: 'fg', value: 0, fmt: v => `signature: ${Math.round(v).toLocaleString('en-US')} bytes`, opacity: 0 }));
+    const parts = [['R', '16', 'fg-2'], ['FORS', '4,224', 'orange'], ['WOTS+C', '1,028', 'teal'], ['path', '416', 'purple']];
+    const brk = parts.map(([a, b, c], i) => sc.add(Text({ x: G.brk[0] + (n ? (i % 2) * 4.8 : 0), y: G.brk[1] - (n ? (i >> 1) * .6 : i * .55), align: 'left', font: 'mono', size: n ? 12 : 13, color: c, text: `${a} ${b}`, opacity: 0 })));
+
+    linesFirst(sc);
+    sc.play('The public key is the root of one tree of height 26: 2²⁶ = 67 million leaves.', [create(tri), fadeIn([root, hLab, ctr])], 1.2);
+    sc.play('The signer picks R (16 bytes) and hashes it with the message. The digest names a leaf and 24 FORS indices.',
+      [fadeIn([msg, Rn, brk[0]]), create([toLeaf, toFors]), to(ctr, { value: 16 })], 1.3);
+    sc.play('FORS at that leaf: per tree, one secret and 10 path nodes. 24 · 11 · 16 = 4,224 bytes.',
+      [lagged(forsTrees.map(create), .2), fadeIn([forsLab, brk[1]]), to(ctr, { value: 16 + 4224 })], 1.6, ease.linear);
+    sc.play('The verifier rebuilds the 24 roots and hashes them into the FORS public key.', [to(forsUp, { opacity: 1, draw: 1 }), fadeIn(fpk), indicate(fpk)], 1.1);
+    sc.play('The leaf\'s WOTS+C key signed that FORS key: 64 chain values and a 4-byte counter, 1,028 bytes.',
+      [create(pkToWots), lagged(chains.map(create), .15), fadeIn([wotsLab, brk[2]]), to(ctr, { value: 16 + 4224 + 1028 })], 1.6, ease.linear);
+    sc.play('Finishing the 64 chains and hashing their tops gives the leaf.', [to(wotsUp, { opacity: 1, draw: 1 }), fadeIn(leaf), indicate(leaf)], 1);
+    sc.play('26 path nodes, 416 bytes, climb from the leaf to the root.', [create(path), fadeIn([pathDots, brk[3]]), to(ctr, { value: 5684 })], 1.8, ease.linear);
+    sc.play('The climb ends on the public key: accept. Total: 5,684 bytes.', [to(root, { color: 'green' }), indicate([root, ctr])], 1);
+  });
+})();
+
+/* ================= Figure 8: signature sizes by part ================= */
+(() => {
+  const fig = $('#fig-sizes'), svg = $('svg', fig);
+  const rows = [
+    { name: 'SLH-DSA-128s (FIPS 205)', note: '2⁶⁴ signatures', parts: [['R', 16, 'muted'], ['FORS', 2912, 'orange'], ['WOTS+ ×7', 3920, 'teal'], ['paths', 1008, 'purple']] },
+    { name: 'leanSphincs', note: '2³⁰ · 373 compressions', parts: [['R', 16, 'muted'], ['FORS', 4224, 'orange'], ['WOTS+C', 1028, 'teal'], ['path', 416, 'purple']] },
+    { name: 'leanSphincs, WOTS forest', note: '2³⁰ · 307 compressions', parts: [['R', 16, 'muted'], ['forest', 2816, 'orange'], ['WOTS+C', 1028, 'teal'], ['path', 416, 'purple']] },
+    { name: 'SLH-DSA-128-24 (SP 800-230)', note: '2²⁴ · 296 compressions', parts: [['R', 16, 'muted'], ['FORS', 2400, 'orange'], ['WOTS+', 1088, 'teal'], ['path', 352, 'purple']] },
+  ];
+  const NS = 'http://www.w3.org/2000/svg';
+  const draw = () => {
+    const narrow = svg.clientWidth < 560, W = narrow ? 380 : 680, x0 = 14, x1 = W - (narrow ? 14 : 80), rowH = narrow ? 84 : 74, H = 40 + rows.length * rowH;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.replaceChildren();
+    const el = (tag, a, st = {}, txt) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); Object.assign(e.style, st); if (txt != null) e.textContent = txt; svg.append(e); return e; };
+    const scale = (x1 - x0) / 7856;
+    let lx = x0;
+    [['FORS / forest', 'orange'], ['WOTS', 'teal'], ['auth path', 'purple']].forEach(([t, c]) => {
+      el('rect', { x: lx, y: 12, width: 12, height: 12, rx: 2 }, { fill: `var(--${c})` });
+      el('text', { x: lx + 17, y: 22 }, { font: '500 13px var(--sans)', fill: 'var(--fg-2)' }, t); lx += narrow ? 112 : 130;
+    });
+    rows.forEach((r, k) => {
+      const y = 40 + k * rowH, total = r.parts.reduce((a, p) => a + p[1], 0);
+      el('text', { x: x0, y: y + 14 }, { font: '600 14px var(--sans)', fill: 'var(--fg)' }, r.name);
+      el('text', { x: x1 + (narrow ? 0 : 76), y: y + 14, 'text-anchor': 'end' }, { font: '400 12px var(--sans)', fill: 'var(--muted)' }, narrow ? '' : r.note);
+      let x = x0;
+      r.parts.forEach(([nm, b, c]) => {
+        const w = b * scale;
+        el('rect', { x, y: y + 22, width: Math.max(1, w - 1.5), height: 28, rx: 3 }, { fill: `var(--${c})`, opacity: c === 'muted' ? .6 : .85 });
+        if (w > (narrow ? 52 : 70)) el('text', { x: x + 6, y: y + 41 }, { font: '600 12px var(--mono)', fill: 'var(--bg)' }, narrow ? b.toLocaleString('en-US') : `${nm} ${b.toLocaleString('en-US')}`);
+        x += w;
+      });
+      el('text', { x: x + 6, y: y + 41 }, { font: '600 13px var(--mono)', fill: 'var(--fg)' }, narrow ? '' : total.toLocaleString('en-US'));
+      if (narrow) el('text', { x: x1, y: y + 14, 'text-anchor': 'end' }, { font: '600 13px var(--mono)', fill: 'var(--fg)' }, `${total.toLocaleString('en-US')} B`);
+      if (narrow) el('text', { x: x0, y: y + 68 }, { font: '400 12px var(--sans)', fill: 'var(--muted)' }, r.note);
+    });
+  };
+  new ResizeObserver(draw).observe(svg); draw();
+})();
+
+/* ================= Figure 9: pruning ================= */
+(() => {
+  const HT = 5, B = 2, SUB = 5;               // tree of height 5; kept subtree = node (level 2, index 5) = leaves 20–23
+  const tries = []; for (let i = 0; i < 40; i++) { const leaf = parseInt(sha256(`hello:R${i}`).slice(0, 2), 16) >> 3; tries.push(leaf); if (leaf >> B === SUB) break; }
+  const opts = n => n ? { x: [0, 33], y: [-1.4, 9.4], pad: 10 } : { x: [0, 33], y: [-1.2, 8.6], pad: 16 };
+  new Scene('#fig-prune', opts, sc => {
+    const n = sc.narrow, X = (l, i) => 1 + i * 2 ** l + (2 ** l - 1) / 2, Y = l => .8 + l * 1.45;
+    const nodes = [], edges = [];
+    for (let l = 0; l <= HT; l++) { nodes[l] = []; for (let i = 0; i < 2 ** (HT - l); i++) {
+      nodes[l][i] = sc.add(Dot({ x: X(l, i), y: Y(l), r: l === 0 ? (n ? 3.4 : 5) : (n ? 3.6 : 5.5), color: 'muted', opacity: 0 }));
+      if (l) for (const c of [2 * i, 2 * i + 1]) edges.push({ l, i, c, e: sc.add(Line({ x1: X(l - 1, c), y1: Y(l - 1), x2: X(l, i), y2: Y(l), color: 'rule', width: 1.3, opacity: 0 })) });
+    } }
+    const inSub = (l, i) => l <= B && (i >> (B - l)) === SUB;
+    const onPath = (l, i) => l > B && i === SUB >> (l - B);
+    const isSurr = (l, i) => l >= B && l < HT && i === ((SUB >> (l - B)) ^ 1);
+    const subN = [], subE = [], surr = [], pathN = [], pathE = [], rest = [], restE = [];
+    for (let l = 0; l <= HT; l++) nodes[l].forEach((o, i) => (inSub(l, i) ? subN : isSurr(l, i) ? surr : onPath(l, i) ? pathN : rest).push(o));
+    edges.forEach(({ l, i, e }) => (inSub(l, i) ? subE : onPath(l, i) ? pathE : restE).push(e));
+    const root = nodes[HT][0];
+    const surrLab = sc.add(Label({ x: X(B, SUB ^ 1), y: Y(B), dy: 18, text: 'surrogate', color: 'purple', size: n ? 11 : 13, opacity: 0 }));
+    const subLab = sc.add(Label({ x: X(B, SUB), y: Y(0), dy: n ? 14 : 18, text: n ? '20–23' : 'leaves 20–23', color: 'teal', size: n ? 11 : 13, opacity: 0 }));
+    const marks = tries.map((leaf, k) => sc.add(Shape({ opacity: 0, leaf, hit: (leaf >> B) === SUB, k, paint(ctx, s, S) {
+      const x = S.X(X(0, s.leaf)), y = S.Y(Y(0)) + (n ? 26 : 34) + 0;
+      const same = tries.slice(0, s.k).filter(v => v === s.leaf).length;
+      ctx.fillStyle = paintColor(s.hit ? 'green' : 'red'); font(ctx, n ? 11 : 13, 'mono', 700); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(s.hit ? '✓' : '×', x, y + same * (n ? 12 : 15));
+    } })));
+    const tryLab = sc.add(Label({ x: 0, y: -1.0, align: 'left', text: `tries: leaves ${tries.join(', ')}`, font: 'mono', size: n ? 11 : 13, color: 'yellow', opacity: 0 }));
+    linesFirst(sc);
+    sc.play(`A full key of height ${HT}: 32 leaves, each a WOTS+C key with its own FORS. Key generation builds them all.`, [lagged([edges.map(o => fadeIn(o.e)), nodes.flat().map(fadeIn)], .6)], 1.4);
+    sc.play('Pruning builds one subtree of 2ᵇ = 4 leaves, here leaves 20 to 23.', [to(subN, { color: 'teal' }), to(subE, { color: 'teal' }), fadeIn(subLab), indicate(subN)], 1);
+    sc.play('The 3 siblings on the way up are surrogates: pseudorandom values from the seed, with nothing built below them.',
+      [to([...rest, ...restE], { opacity: .14 }), to(surr, { color: 'purple', r: n ? 5.5 : 8 }), fadeIn(surrLab), indicate(surr)], 1.3);
+    sc.play('Hashing the subtree root with the surrogates gives the root. It looks like any other public key.', [to([...pathN, ...pathE], { color: 'blue' }), to(root, { r: n ? 6 : 9 }), indicate(root)], 1.1);
+    sc.play(`Signing: try R = R₀, R₀ + Δ, …; each try hashes to a leaf. Tries 1 to ${tries.length - 1} land on leaves ${tries.slice(0, -1).join(', ')}: outside, rejected.`,
+      [fadeIn(tryLab), lagged(marks.slice(0, -1).map(fadeIn), .3)], 1.6);
+    sc.play(`Try ${tries.length} lands on leaf ${tries.at(-1)}, inside the subtree: sign there. On average this takes 2⁵⁻² = 8 tries.`, [fadeIn(marks.at(-1)), indicate(nodes[0][tries.at(-1)])], 1);
+  });
+})();
+
+</script>
+</html>
