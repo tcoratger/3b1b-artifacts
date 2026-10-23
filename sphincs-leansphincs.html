@@ -1376,13 +1376,13 @@ const Label = p => Text({ size: 14, color: 'fg-2', ...p });
   const rows = [
     { name: 'SLH-DSA-128s', src: 'NIST · FIPS 205', note: '2⁶⁴ signatures', parts: [['R', 16, 'muted'], ['FORS', 2912, 'orange'], ['WOTS+ ×7', 3920, 'teal'], ['paths', 1008, 'purple']] },
     { name: 'leanSphincs', src: 'proposal · sphincs.art', note: '2³⁰ · 373 compressions', parts: [['R', 16, 'muted'], ['FORS', 4224, 'orange'], ['WOTS+C', 1028, 'teal'], ['path', 416, 'purple']] },
-    { name: 'best entry', src: 'leaderboard · sig.golf', note: '6,963 RISC-V cycles', parts: [['entry', 5239, 'fg-2']] },
+    { name: 'best entry', src: 'leaderboard · sig.golf', note: '6,963 RISC-V cycles', detail: 'total only: the split by layer varies by submission', parts: [['entry', 5239, 'fg-2']] },
     { name: 'leanSphincs, WOTS forest', src: 'proposal · sphincs.art', note: '2³⁰ · 307 compressions', parts: [['R', 16, 'muted'], ['forest', 2816, 'orange'], ['WOTS+C', 1028, 'teal'], ['path', 416, 'purple']] },
     { name: 'SLH-DSA-128-24', src: 'NIST draft · SP 800-230', note: '2²⁴ · 296 compressions', parts: [['R', 16, 'muted'], ['FORS', 2400, 'orange'], ['WOTS+', 1088, 'teal'], ['path', 352, 'purple']] },
   ];
   const NS = 'http://www.w3.org/2000/svg';
   const draw = () => {
-    const narrow = svg.clientWidth < 560, W = narrow ? 380 : 680, x0 = 14, x1 = W - (narrow ? 14 : 80), rowH = narrow ? 84 : 74, H = 40 + rows.length * rowH;
+    const narrow = svg.clientWidth < 560, W = narrow ? 380 : 680, x0 = 14, x1 = W - (narrow ? 14 : 80), rowH = narrow ? 100 : 88, H = 40 + rows.length * rowH;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.replaceChildren();
     const el = (tag, a, st = {}, txt) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); Object.assign(e.style, st); if (txt != null) e.textContent = txt; svg.append(e); return e; };
     const scale = (x1 - x0) / 7856;
@@ -1400,12 +1400,16 @@ const Label = p => Text({ size: 14, color: 'fg-2', ...p });
       r.parts.forEach(([nm, b, c]) => {
         const w = b * scale;
         el('rect', { x, y: y + 22, width: Math.max(1, w - 1.5), height: 28, rx: 3 }, { fill: `var(--${c})`, opacity: c === 'muted' ? .6 : c === 'fg-2' ? .35 : .85 });
-        if (w > (narrow ? 52 : 70)) el('text', { x: x + 6, y: y + 41 }, { font: '600 12px var(--mono)', fill: 'var(--bg)' }, narrow ? b.toLocaleString('en-US') : `${nm} ${b.toLocaleString('en-US')}`);
+        // Label inside the segment only if it fits (12px mono: about 7.2 units per character).
+        const fit = [`${nm} ${b.toLocaleString('en-US')}`, b.toLocaleString('en-US')].find(t => t.length * 7.2 + 12 <= w);
+        if (fit) el('text', { x: x + 6, y: y + 41 }, { font: '600 12px var(--mono)', fill: c === 'fg-2' ? 'var(--fg)' : 'var(--bg)' }, fit);
         x += w;
       });
       el('text', { x: x + 6, y: y + 41 }, { font: '600 13px var(--mono)', fill: 'var(--fg)' }, narrow ? '' : total.toLocaleString('en-US'));
       if (narrow) el('text', { x: x1, y: y + 14, 'text-anchor': 'end' }, { font: '600 13px var(--mono)', fill: 'var(--fg)' }, `${total.toLocaleString('en-US')} B`);
-      if (narrow) el('text', { x: x0, y: y + 68 }, { font: '400 12px var(--sans)', fill: 'var(--muted)' }, r.note);
+      // Every part, in full, under the bar.
+      el('text', { x: x0, y: y + 68 }, { font: '400 11.5px var(--mono)', fill: 'var(--fg-2)' }, r.detail ?? r.parts.map(([nm, b]) => `${nm} ${b.toLocaleString('en-US')}`).join(' · '));
+      if (narrow) el('text', { x: x0, y: y + 86 }, { font: '400 12px var(--sans)', fill: 'var(--muted)' }, r.note);
     });
   };
   new ResizeObserver(draw).observe(svg); draw();
