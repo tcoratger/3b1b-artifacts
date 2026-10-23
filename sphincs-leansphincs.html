@@ -471,19 +471,37 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
 
   <section>
     <h2 id="pruning"><span class="num">9</span>Pruning: build only part of the tree</h2>
-    <p>A full leanSphincs key has \(2^{26}\) leaves to generate: about \(16 \cdot 10^{9}\) compressions, 16 seconds on a laptop and about 6 days on a hardware wallet. Hypertree pruning <span class="src"><i>blog</i> conduition</span> builds one subtree of \(2^{b}\) leaves and fills the missing siblings above it with pseudorandom surrogates. The root looks like any other public key (Figure 17).</p>
+    <p>Before a key can sign, its owner must compute the public key, and that means building every leaf of the tree. A leanSphincs leaf is a WOTS+C key, about 241 compressions, and there are \(2^{26}\) of them: \(16.2 \cdot 10^{9}\) compressions <span class="src"><i>proposal</i> sphincs.art</span>. That is 16 seconds on a laptop and about 6 days on a Ledger Nano S+, which manages 33,000 BLAKE2s compressions per second. Pruning <span class="src"><i>blog</i> conduition</span> trades lifetime for key-generation time, and verifiers cannot tell.</p>
+
+    <h3>Surrogates: leaves that are never built</h3>
+    <p>The tree only needs a 16-byte hash at each leaf position. A signer who will never sign with a leaf can put a <em>surrogate</em> there: a pseudorandom value derived from the secret seed, one hash instead of a whole WOTS key. Figure 17 keeps one subtree real and replaces everything else.</p>
   </section>
 
   <figure class="fig wide" id="fig-prune" aria-labelledby="cap-prune">
     <div class="stage">
-      <canvas data-aspect="0.5" data-aspect-narrow="1.0" role="img" aria-label="A tree of 32 leaves where only a 4-leaf subtree is built; three surrogate siblings complete the root; the signer retries R until the message lands in the subtree."></canvas>
+      <canvas data-aspect="0.56" data-aspect-narrow="1.1" role="img" aria-label="A tree of 32 leaves where only a 4-leaf subtree is built; three surrogate siblings complete the root; the signer retries R until the message lands in the subtree."></canvas>
       <div class="try">Play, scrub, or step with ← →</div>
     </div>
-    <figcaption id="cap-prune"><b>Figure 17.</b> A toy tree of height 5 pruned to a subtree of height \(b = 2\). The signer retries \(R\) until the digest picks a leaf in the subtree, \(2^{5-2} = 8\) tries on average. All signatures share 4 leaves instead of 32, so each FORS is used 8 times more often and the key wears out sooner.</figcaption>
+    <figcaption id="cap-prune"><b>Figure 17.</b> A toy tree of height 5 pruned to a subtree of height \(b = 2\). Key generation builds 4 WOTS keys instead of 32. The signer retries \(R\) until the digest picks a leaf in the subtree, \(2^{5-2} = 8\) tries on average. All signatures share 4 leaves instead of 32, so each FORS is used 8 times more often.</figcaption>
   </figure>
 
   <section>
-    <p>Every retry costs one compression, \(2^{26-b}\) on average, and every FORS sees \(2^{26-b}\) times more signatures, which shifts Figure 14's curve left. The leanSphincs proposal picks three points on that trade <span class="src"><i>proposal</i> sphincs.art</span>:</p>
+    <p>Three numbers move together with the subtree height \(b\): key generation shrinks by \(2^{26-b}\), each signature needs \(2^{26-b}\) retries of \(R\) on average, and every FORS is used \(2^{26-b}\) times more often, which shrinks the lifetime of Section 7. Figure 18 is the dial.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-dial" aria-labelledby="cap-dial">
+    <div class="stage">
+      <canvas data-aspect="0.6" data-aspect-narrow="1.32" role="img" aria-label="The leanSphincs tree of height 26 with a built subtree of height b inside it. Bars show key-generation compressions, retries per signature and lifetime on log scales as b changes; the Light, Standard and Full tiers sit at b = 13, 20 and 26."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>subtree height b <input id="dl-b" type="range" min="8" max="26" value="13"><output for="dl-b">13</output></label>
+    </div>
+    <figcaption id="cap-dial"><b>Figure 18.</b> The pruning dial for leanSphincs. Each step down in \(b\) halves key generation, doubles the retries per signature, and roughly halves the lifetime. Key generation is about \(241 \cdot 2^{b}\) compressions, read off the note's figures; lifetimes are cover-rule estimates. The tiers of the table below sit at \(b = 13\), 20 and 26.</figcaption>
+  </figure>
+
+  <section>
+    <p>The leanSphincs proposal picks three points on that dial <span class="src"><i>proposal</i> sphincs.art</span>:</p>
     <div class="tablewrap">
     <table class="tiers">
       <thead><tr><th></th><th>Light</th><th>Standard</th><th>Full</th></tr></thead>
@@ -494,11 +512,58 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
         <tr><th>keygen</th><td>2.0M · 60 s</td><td>254M · 1.0 s</td><td>16.2B · 16 s</td></tr>
         <tr><th>signing</th><td>74K · 2.2 s</td><td>70K · 0.3 ms</td><td>93K · 0.1 ms</td></tr>
         <tr><th>retries of R</th><td>8,192</td><td>64</td><td>1</td></tr>
+        <tr><th>cache</th><td>16 KiB</td><td>1 MiB</td><td>16 MiB</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="small">Counts are BLAKE2s compressions; signing includes the retries.</p>
-    <p>Pruning is new and, per its author, not yet peer reviewed. One risk is reusing a seed with two pruning parameters; the proposal derives the working seed as \(H(\text{seed} \,\|\, b)\) so each \(b\) gives an unrelated key.</p>
+    <p class="small">Counts are BLAKE2s compressions; signing includes the retries. The cache holds the built subtree, so the signer never rebuilds it.</p>
+
+    <h3>Pruning a hypertree: prune evenly</h3>
+    <p>Conduition's article targets the FIPS 205 hypertree, where pruning is subtler: a pruned leaf high up removes a whole branch of trees below it. Pruning a leaf saves one WOTS key per signature wherever it sits, but how many FORS keys it removes depends on where it sits, and removed FORS keys are what cost retries and lifetime. Figure 19 replays the article's example: three layers of trees with 4 leaves, so \(4 \cdot 4 \cdot 4 = 64\) FORS keys.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-hyper" aria-labelledby="cap-hyper">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="A hypertree of three layers of 4-leaf trees over 64 FORS keys. Pruning a top leaf removes 16 FORS keys, a second top leaf 16 more; pruning one leaf in each of the 3 remaining middle trees removes only 12, and one in each of the 9 remaining bottom trees removes 9, leaving 27."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-hyper"><b>Figure 19.</b> Conduition's example. A second top leaf would cost 16 more FORS keys; spreading the same saving over the next layers costs 12, then 9. Rule: prune from the layer with the most leaves left, top first. The result is a smaller regular hypertree, \(3 \cdot 3 \cdot 3 = 27\). In leanSphincs there is a single layer, so pruning is simply choosing a subtree.</figcaption>
+  </figure>
+
+  <section>
+    <h3>When retries eat the savings</h3>
+    <p>Retries grow exponentially with what is pruned, while the savings grow linearly. Figure 20 uses the article's numbers for SLH-DSA-128s <span class="src"><i>NIST</i> FIPS 205</span>, 7 layers of trees of height 9, where stock signing costs about 2.1 million SHA-256 compressions and each tree about 291,840.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-grind" aria-labelledby="cap-grind">
+    <div class="stage">
+      <svg class="plot" viewBox="0 0 680 300" role="img" aria-label="Signing work for SLH-DSA-128s with 0 to 3 top layers maximally pruned: 2.1 million, 1.81 million, 1.78 million, then 135 million because retries reach 2 to the 27."></svg>
+    </div>
+    <figcaption id="cap-grind"><b>Figure 20.</b> Signing work with the top 0 to 3 layers of SLH-DSA-128s maximally pruned. Each pruned layer saves one tree, 291,840 compressions, but multiplies the retries by \(2^{9}\): 512, then 262,144, then 134 million. The second layer saves only about 30,000 net; the third makes signing 64 times slower. <span class="src"><i>blog</i> conduition</span></figcaption>
+  </figure>
+
+  <section>
+    <h3>What an observer can see</h3>
+    <p>The leaf index is part of every signature. An unpruned key spreads its signatures over all \(2^{26}\) leaves; a pruned key only ever uses its \(2^{b}\). Figure 21 shows three toy keys of \(2^{12}\) leaves as seen from outside: a full key, a key pruned to a contiguous subtree of 64 leaves, and a key pruned to 64 leaves scattered at pseudorandom positions, as the article recommends.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-observe" aria-labelledby="cap-observe">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.95" role="img" aria-label="Three 64-by-64 grids of leaves. Signatures from a full key spread out; from a contiguous pruned key they fall in one 8-by-8 block; from a scattered pruned key they spread but soon repeat leaves, marked red."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>signatures seen <input id="ob-n" type="range" min="1" max="150" value="40"><output for="ob-n">40</output></label>
+    </div>
+    <figcaption id="cap-observe"><b>Figure 21.</b> A contiguous subtree gives itself away after two signatures: they share their top \(26-b\) index bits, which happens by chance once in \(2^{26-b}\). Scattered leaves hide that, but leaves start to repeat after about \(\sqrt{\pi/2 \cdot 2^{b}}\) signatures: 113 at \(b = 13\) and 1,283 at \(b = 20\), against 10,267 for a full key. Long-term observers can still tell that a key is pruned, and roughly how hard.</figcaption>
+  </figure>
+
+  <section>
+    <p>This leak is the open question around pruning. It reveals a class of device, such as a hardware wallet or a threshold setup, not a key. Whether that is acceptable, and whether full-power signers should imitate pruned ones to blur the signal, is still being debated.</p>
+
+    <h3>Keys that must never mix</h3>
+    <p>A pruned signer and a standard signer that load the same seed compute different public keys from overlapping secret material. In a hypertree, that can make one WOTS key sign two different tree roots, which breaks the scheme. The fix is to make the pruning parameters part of the key: derive the working seed as \(H(\text{seed} \,\|\, b)\) <span class="src"><i>proposal</i> sphincs.art</span>, or mark pruned keys with their own format <span class="src"><i>blog</i> conduition</span>. A different \(b\) then gives an unrelated key. Pruning is new and, per its author, not yet peer reviewed.</p>
   </section>
 
   <section>
@@ -1419,7 +1484,7 @@ const Label = p => Text({ size: 14, color: 'fg-2', ...p });
 (() => {
   const HT = 5, B = 2, SUB = 5;               // tree of height 5; kept subtree = node (level 2, index 5) = leaves 20–23
   const tries = []; for (let i = 0; i < 40; i++) { const leaf = parseInt(sha256(`hello:R${i}`).slice(0, 2), 16) >> 3; tries.push(leaf); if (leaf >> B === SUB) break; }
-  const opts = n => n ? { x: [0, 33], y: [-1.4, 9.4], pad: 10 } : { x: [0, 33], y: [-1.2, 8.6], pad: 16 };
+  const opts = n => n ? { x: [0, 33], y: [-4.6, 9.4], pad: 10 } : { x: [0, 33], y: [-1.2, 9.8], pad: 16 };
   new Scene('#fig-prune', opts, sc => {
     const n = sc.narrow, X = (l, i) => 1 + i * 2 ** l + (2 ** l - 1) / 2, Y = l => .8 + l * 1.45;
     const nodes = [], edges = [];
@@ -1443,15 +1508,22 @@ const Label = p => Text({ size: 14, color: 'fg-2', ...p });
       ctx.fillText(s.hit ? '✓' : '×', x, y + same * (n ? 12 : 15));
     } })));
     const tryLab = sc.add(Label({ x: 0, y: -1.0, align: 'left', text: `tries: leaves ${tries.join(', ')}`, font: 'mono', size: n ? 11 : 13, color: 'yellow', opacity: 0 }));
+    // Three counters: what pruning buys and what it costs.
+    const C = k => n ? { x: .2, y: -2.2 - k * .8 } : { x: 32.8, y: 9.4 - k * .75 };
+    const cnt = (k, color, fmt, value) => sc.add(Text({ ...C(k), align: n ? 'left' : 'right', font: 'mono', size: n ? 11 : 13, color, value, fmt, opacity: 0 }));
+    const built = cnt(0, 'teal', v => `WOTS keys built: ${Math.round(v)} of 32`, 32);
+    const triesC = cnt(1, 'yellow', v => `tries per signature: ${Math.round(v)}`, 1);
+    const useC = cnt(2, 'red', v => `signatures per FORS: ×${Math.round(v)}`, 1);
     linesFirst(sc);
-    sc.play(`A full key of height ${HT}: 32 leaves, each a WOTS+C key with its own FORS. Key generation builds them all.`, [lagged([edges.map(o => fadeIn(o.e)), nodes.flat().map(fadeIn)], .6)], 1.4);
-    sc.play('Pruning builds one subtree of 2ᵇ = 4 leaves, here leaves 20 to 23.', [to(subN, { color: 'teal' }), to(subE, { color: 'teal' }), fadeIn(subLab), indicate(subN)], 1);
+    sc.play(`A full key of height ${HT}: 32 leaves, each a WOTS+C key with its own FORS. Key generation builds them all.`, [lagged([edges.map(o => fadeIn(o.e)), nodes.flat().map(fadeIn)], .6), fadeIn(built)], 1.4);
+    sc.play('Pruning builds one subtree of 2ᵇ = 4 leaves, here leaves 20 to 23.', [to(subN, { color: 'teal' }), to(subE, { color: 'teal' }), fadeIn(subLab), indicate(subN), to(built, { value: 4 })], 1);
     sc.play('The 3 siblings on the way up are surrogates: pseudorandom values from the seed, with nothing built below them.',
       [to([...rest, ...restE], { opacity: .14 }), to(surr, { color: 'purple', r: n ? 5.5 : 8 }), fadeIn(surrLab), indicate(surr)], 1.3);
     sc.play('Hashing the subtree root with the surrogates gives the root. It looks like any other public key.', [to([...pathN, ...pathE], { color: 'blue' }), to(root, { r: n ? 6 : 9 }), indicate(root)], 1.1);
     sc.play(`Signing: try R = R₀, R₀ + Δ, …; each try hashes to a leaf. Tries 1 to ${tries.length - 1} land on leaves ${tries.slice(0, -1).join(', ')}: outside, rejected.`,
       [fadeIn(tryLab), lagged(marks.slice(0, -1).map(fadeIn), .3)], 1.6);
-    sc.play(`Try ${tries.length} lands on leaf ${tries.at(-1)}, inside the subtree: sign there. On average this takes 2⁵⁻² = 8 tries.`, [fadeIn(marks.at(-1)), indicate(nodes[0][tries.at(-1)])], 1);
+    sc.play(`Try ${tries.length} lands on leaf ${tries.at(-1)}, inside the subtree: sign there. On average this takes 2⁵⁻² = 8 tries.`, [fadeIn(marks.at(-1)), indicate(nodes[0][tries.at(-1)]), fadeIn(triesC), to(triesC, { value: 8 })], 1);
+    sc.play('Every signature now lands on one of 4 leaves instead of 32, so each FORS signs 8 times more often and the key wears out 8 times sooner.', [fadeIn(useC), to(useC, { value: 8 }), indicate(subN)], 1.1);
   });
 })();
 
@@ -1887,6 +1959,173 @@ const pct = x => x >= .1 ? `${Math.round(100 * x)}%` : `${(100 * x).toFixed(1)}%
     out.textContent = `N = ${N} · average chance ${pct(S.avg)} · security ${isFinite(cur) ? cur.toFixed(1) : '∞'} bits · ${isFinite(cur) && cur >= TARGET ? 'still above' : 'below'} the ${TARGET}-bit target`;
   });
   range($('#tl-n'), v => { N = v; paint(); });
+})();
+
+/* ================= Shared: leanSphincs cover-rule security (k = 24, a = 10, h = 26) ================= */
+const COVER = (() => {
+  const K = 24, A = 10, H = 26, q = Math.log1p(-(2 ** -A));
+  const lnFact = r => r < 30 ? (() => { let s = 0; for (let i = 2; i <= r; i++) s += Math.log(i); return s; })()
+    : r * Math.log(r) - r + .5 * Math.log(2 * Math.PI * r) + 1 / (12 * r) - 1 / (360 * r ** 3);
+  // Bits of security after 2^log2N signatures on a subtree of 2^b leaves.
+  const bits = (log2N, b) => {
+    const lam = 2 ** (log2N - b), sd = Math.sqrt(lam);
+    let E = 0; for (let r = Math.max(0, Math.floor(lam - 12 * sd - 5)); r <= Math.ceil(lam + 12 * sd + 60); r++)
+      E += Math.exp(-lam + r * Math.log(lam) - lnFact(r)) * (-Math.expm1(r * q)) ** K;
+    return -Math.log2(E) + (H - b);
+  };
+  const lifetime = b => { let lo = 4, hi = 40; for (let i = 0; i < 48; i++) { const m = (lo + hi) / 2; bits(m, b) >= 127 ? lo = m : hi = m; } return 2 ** lo; };
+  return { bits, lifetime };
+})();
+const bigM = v => v >= 1e8 ? `${Math.round(v / 1e6)}M` : `${(v / 1e6).toFixed(2)}M`;
+const big = v => v >= 1e9 ? `${(v / 1e9).toFixed(v >= 1e10 ? 0 : 1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(v >= 1e4 ? 0 : 1)}K` : `${Math.round(v)}`;
+const dur = s => s < 1 ? `${Math.round(s * 1000)} ms` : s < 120 ? `${s.toFixed(s < 10 ? 1 : 0)} s` : s < 7200 ? `${Math.round(s / 60)} min` : s < 172800 ? `${(s / 3600).toFixed(1)} h` : `${(s / 86400).toFixed(1)} days`;
+
+/* ================= Figure 18: the pruning dial ================= */
+(() => {
+  const fig = $('#fig-dial'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const lives = {}; for (let b = 8; b <= 26; b++) lives[b] = COVER.lifetime(b);
+  const keygen = b => 241.4 * 2 ** b, LEDGER = 33e3;
+  const tiers = [[13, 'Light'], [20, 'Standard'], [26, 'Full']];
+  let B = 13;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560;
+    // The tree: a triangle of height 26 levels, with the built subtree and the surrogate siblings.
+    const tw = narrow ? w - 40 : w * .36, th = narrow ? h * .34 : h - 70, tx = narrow ? w / 2 : 24 + tw / 2, ty = narrow ? 18 : 34;
+    const lv = th / 26, base = ty + th;
+    ctx.strokeStyle = tok('rule'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - tw / 2, base); ctx.lineTo(tx + tw / 2, base); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = tok('bg-3'); ctx.fill();
+    const subW = tw * 2 ** (B - 26), sh = B * lv, sx = tx + tw * .18 * (1 - B / 26), stop = base - sh;
+    // Drawn to scale: the built subtree holds 2^(b-26) of the leaves, so its base is that fraction of the tree's base.
+    const vis = Math.max(3, subW);
+    ctx.fillStyle = tok('teal'); ctx.beginPath(); ctx.moveTo(sx, stop); ctx.lineTo(sx - vis / 2, base); ctx.lineTo(sx + vis / 2, base); ctx.closePath(); ctx.fill();
+    if (B < 26) {
+      ctx.strokeStyle = tok('blue'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, stop); ctx.lineTo(tx, ty); ctx.stroke();
+      for (let l = B; l < 26; l++) { const t = (l - B + .5) / (26 - B), px = sx + (tx - sx) * t, py = stop + (ty - stop) * t, side = l % 2 ? 1 : -1;
+        ctx.fillStyle = tok('purple'); ctx.beginPath(); ctx.arc(px + side * 7, py, 3, 0, 2 * Math.PI); ctx.fill(); }
+    }
+    ctx.fillStyle = tok('blue'); ctx.beginPath(); ctx.arc(tx, ty, 5, 0, 2 * Math.PI); ctx.fill();
+    font(ctx, 12, 'sans', 600); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = tok('teal'); ctx.fillText(B < 26 ? `built: 2^${B} of 2^26 leaves (1/${(2 ** (26 - B)).toLocaleString('en-US')})` : 'built: the whole tree', tx, base + 6);
+    if (B < 26) { ctx.fillStyle = tok('purple'); ctx.textAlign = 'left'; ctx.fillText(`${26 - B} surrogates`, tx + 10, ty + (stop - ty) * .35); }
+    // Three log bars.
+    const bx = narrow ? 20 : w * .46, bw = narrow ? w - 40 : w * .5, by0 = narrow ? base + 50 : 70, gap = narrow ? 84 : (h - 110) / 3;
+    const bars = [
+      { name: 'key generation (compressions)', col: 'teal', v: keygen(B), lo: 4, hi: 11, f: b => keygen(b), extra: `${dur(keygen(B) / LEDGER)} on a Ledger` },
+      { name: 'retries of R per signature', col: 'yellow', v: 2 ** (26 - B), lo: 0, hi: 6, f: b => 2 ** (26 - b), extra: '' },
+      { name: 'lifetime at 127 bits (signatures)', col: 'red', v: lives[B], lo: 3, hi: 10, f: b => lives[b], extra: '' },
+    ];
+    bars.forEach((bar, k) => {
+      const y = by0 + k * gap, X = v => bx + (Math.log10(v) - bar.lo) / (bar.hi - bar.lo) * bw;
+      font(ctx, 12, 'sans', 600); ctx.fillStyle = tok('fg-2'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(bar.name, bx, y - 4);
+      const nw = ctx.measureText(bar.name).width; font(ctx, 13, 'mono', 600); ctx.fillStyle = tok(bar.col); ctx.fillText(big(bar.v) + (bar.extra && !narrow ? ` · ${bar.extra}` : ''), bx + nw + 10, y - 3);
+      ctx.fillStyle = tok('bg-3'); ctx.fillRect(bx, y, bw, 18);
+      ctx.fillStyle = tok(bar.col); ctx.fillRect(bx, y, Math.max(2, X(bar.v) - bx), 18);
+      font(ctx, 10, 'mono'); ctx.fillStyle = tok('muted'); ctx.textBaseline = 'top';
+      const sup = e => String(e).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join('');
+      for (let e = bar.lo; e <= bar.hi; e++) { ctx.textAlign = e === bar.lo ? 'left' : e === bar.hi ? 'right' : 'center'; ctx.fillText(e ? `10${sup(e)}` : '1', X(10 ** e), y + 22); }
+      tiers.forEach(([tb, tn]) => { const tx2 = X(bar.f(tb)); ctx.strokeStyle = tok('fg'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(tx2, y); ctx.lineTo(tx2, y + 18); ctx.stroke();
+        font(ctx, 10, 'sans', 600); ctx.fillStyle = tok('fg-2'); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(tn, tx2, y + 34); });
+    });
+    out.textContent = `b = ${B} · keygen ${big(keygen(B))} compressions, ${dur(keygen(B) / LEDGER)} on a Ledger · ${(2 ** (26 - B)).toLocaleString('en-US')} retries per signature · lifetime ≈ ${big(lives[B])}`;
+  });
+  range($('#dl-b'), v => { B = v; paint(); });
+})();
+
+/* ================= Figure 19: pruning a 4-regular hypertree evenly ================= */
+(() => {
+  const opts = n => n ? { x: [0, 64], y: [-1.2, 12], pad: 8 } : { x: [0, 64], y: [-.8, 11.6], pad: 14 };
+  new Scene('#fig-hyper', opts, sc => {
+    const n = sc.narrow, R = n ? 1.8 : 3;
+    const fx = (a, b, c) => 16 * a + 4 * b + c + .5;
+    const l3c = (a, b) => 16 * a + 4 * b + 2, l2c = a => 16 * a + 8, l1c = 32;
+    const objs = { l1: [], l2: [], l3: [], fors: [] };
+    const leaf = (x, y, tag) => sc.add(Dot({ x, y, r: R + .6, color: 'teal', opacity: 0, tag }));
+    const tri = (cx, y, wd, col) => sc.add(Path({ pts: [[cx, y + 1], [cx - wd / 2, y], [cx + wd / 2, y]], closed: true, color: col, width: 1.3, draw: 0 }));
+    // Layer 1: one tree whose 4 leaves sit above the 4 layer-2 trees.
+    const t1 = tri(l1c, 9.6, 48, 'muted');
+    const L1 = [0, 1, 2, 3].map(a => leaf(l2c(a), 9.6, `a${a}`));
+    const T2 = [0, 1, 2, 3].map(a => tri(l2c(a), 6.2, 12, 'muted'));
+    const L2 = [0, 1, 2, 3].map(a => [0, 1, 2, 3].map(b => leaf(l3c(a, b), 6.2, `a${a} b${b}`)));
+    const T3 = [0, 1, 2, 3].map(a => [0, 1, 2, 3].map(b => tri(l3c(a, b), 2.8, 3, 'muted')));
+    const L3 = [0, 1, 2, 3].map(a => [0, 1, 2, 3].map(b => [0, 1, 2, 3].map(c => leaf(fx(a, b, c), 2.8, ''))));
+    const F = [0, 1, 2, 3].map(a => [0, 1, 2, 3].map(b => [0, 1, 2, 3].map(c => sc.add(Rect({ x: fx(a, b, c) - .35, y: .2, w: .7, h: .9, color: 'orange', fill: 'orange', width: 0, radius: 1, opacity: 0 })))));
+    const links = [];
+    [0, 1, 2, 3].forEach(a => { links.push(sc.add(Line({ x1: l2c(a), y1: 9.6, x2: l2c(a), y2: 7.2, color: 'rule', width: 1, dash: [3, 3], opacity: 0 })));
+      [0, 1, 2, 3].forEach(b => links.push(sc.add(Line({ x1: l3c(a, b), y1: 6.2, x2: l3c(a, b), y2: 3.8, color: 'rule', width: 1, dash: [3, 3], opacity: 0 })))); });
+    const left = sc.add(Text({ x: 64, y: 11.3, align: 'right', value: 64, fmt: v => `FORS keys left: ${Math.round(v)}`, font: 'mono', size: n ? 11 : 14, weight: 600, color: 'orange', opacity: 0 }));
+    const lay = (y, t) => sc.add(Label({ x: 0, y, align: 'left', text: t, size: n ? 10 : 12, color: 'muted', opacity: 0 }));
+    const layLabs = [lay(10.3, 'layer 1'), lay(7.2, 'layer 2'), lay(3.8, 'layer 3')];
+    const kill = (list, alpha = .1) => to([list].flat(4), { opacity: alpha });
+    const surr = list => to([list].flat(4), { color: 'purple', r: R + 1.4 });
+    const branch2 = a => [T2[a], L2[a], T3[a], L3[a], F[a]];
+    const branch3 = (a, b) => [T3[a][b], L3[a][b], F[a][b]];
+    linesFirst(sc);
+    sc.play('A hypertree of 3 layers. Every tree has 4 leaves, and each leaf\'s WOTS key signs the root of a tree below. 4 · 4 · 4 = 64 FORS keys at the bottom.',
+      [lagged([[create(t1), fadeIn(L1)], [create(T2), fadeIn(L2.flat())], [create(T3.flat()), fadeIn(L3.flat(2)), fadeIn(links)], [fadeIn(F.flat(2)), fadeIn([left, ...layLabs])]], .5)], 2);
+    sc.play('Prune leaf 3 of the top tree: its whole branch disappears, 16 FORS keys.', [surr(L1[3]), kill(branch2(3)), to(left, { value: 48 })], 1.3);
+    sc.play('Prune top leaf 2 as well: 16 more. Only 32 FORS keys remain.', [surr(L1[2]), kill(branch2(2)), to(left, { value: 32 })], 1.2);
+    sc.play('Undo that. Instead, prune one leaf in each of the 3 remaining layer-2 trees. It saves the same work per signature.', [to(L1[2], { color: 'teal', r: R + .6 }), kill(branch2(2), 1), to(left, { value: 48 })], 1.2);
+    sc.play('That removes only 3 · 4 = 12 FORS keys, not 16.', [surr([0, 1, 2].map(a => L2[a][3])), kill([0, 1, 2].map(a => branch3(a, 3))), to(left, { value: 36 })], 1.3);
+    sc.play('Next, one leaf in each of the 9 remaining layer-3 trees: only 9 FORS keys.', [surr([0, 1, 2].map(a => [0, 1, 2].map(b => L3[a][b][3]))), kill([0, 1, 2].map(a => [0, 1, 2].map(b => F[a][b][3]))), to(left, { value: 27 })], 1.3);
+    sc.play('Every tree now has 3 leaves: a regular hypertree again, with 3 · 3 · 3 = 27 FORS keys. Prune the layer with the most leaves left, top first, and repeat.', [indicate(F.flat(2).filter((_, i) => true))], 1.2);
+  });
+})();
+
+/* ================= Figure 20: retries eat the savings (SLH-DSA-128s) ================= */
+(() => {
+  const svg = $('#fig-grind svg'), NS = 'http://www.w3.org/2000/svg';
+  const TREE = 291840, STOCK = 2.1e6;
+  const draw = () => {
+    const narrow = svg.clientWidth > 0 && svg.clientWidth < 560, W = narrow ? 380 : 680, x0 = narrow ? 14 : 150, x1 = W - 20, rowH = narrow ? 64 : 56, top = 34, H = top + 4 * rowH + 30;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.replaceChildren();
+    const el = (tag, a, st = {}, txt) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); Object.assign(e.style, st); if (txt != null) e.textContent = txt; svg.append(e); return e; };
+    const sx = v => x0 + v / 2.4e6 * (x1 - x0);
+    [['tree building', 'purple'], ['retries of R', 'yellow']].forEach(([t, c], i) => { el('rect', { x: (narrow ? 14 : x0) + i * 140, y: 8, width: 12, height: 12, rx: 2 }, { fill: `var(--${c})` }); el('text', { x: (narrow ? 14 : x0) + i * 140 + 17, y: 18 }, { font: '500 12px var(--sans)', fill: 'var(--fg-2)' }, t); });
+    for (let j = 0; j <= 3; j++) {
+      const y = top + j * rowH + (narrow ? 18 : 0), tree = STOCK - j * TREE, grind = 2 ** (9 * j), total = tree + grind;
+      el('text', narrow ? { x: 14, y: y - 4 } : { x: x0 - 10, y: y + 17, 'text-anchor': 'end' }, { font: '600 13px var(--sans)', fill: 'var(--fg)' }, j ? `top ${j} layer${j > 1 ? 's' : ''} pruned` : 'no pruning');
+      el('rect', { x: x0, y, width: sx(tree) - x0, height: 24, rx: 3 }, { fill: 'var(--purple)', opacity: .8 });
+      const gEnd = Math.min(x1, sx(total));
+      el('rect', { x: sx(tree), y, width: Math.max(1.5, gEnd - sx(tree)), height: 24, rx: 2 }, { fill: 'var(--yellow)' });
+      if (total > 2.4e6) {
+        el('path', { d: `M${x1 - 14},${y - 3} l6,15 l-6,15` }, { fill: 'none', stroke: 'var(--bg-2)', strokeWidth: 5 });
+        el('text', { x: x1 - 6, y: y + 42, 'text-anchor': 'end' }, { font: '600 12px var(--mono)', fill: 'var(--red)' }, `${bigM(total)}: 2²⁷ retries, 64× stock signing`);
+      } else el('text', narrow ? { x: x1, y: y - 4, 'text-anchor': 'end' } : { x: gEnd + 6, y: y + 17 }, { font: '600 12px var(--mono)', fill: 'var(--fg)' }, `${bigM(total)}${j ? ` · ${big(grind)} retries` : ''}`);
+    }
+    el('text', { x: narrow ? 14 : x0, y: H - 6 }, { font: '400 11px var(--sans)', fill: 'var(--muted)' }, narrow ? 'SHA-256 compressions per signature, SLH-DSA-128s' : 'SHA-256 compressions per signature, SLH-DSA-128s, from conduition\'s article');
+  };
+  new ResizeObserver(draw).observe(svg); draw();
+})();
+
+/* ================= Figure 21: what an observer sees ================= */
+(() => {
+  const fig = $('#fig-observe'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const mulberry32 = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  // Leaf index → grid cell in Z-order, so a subtree of 64 leaves is an 8 × 8 block.
+  const cellOf = i => { let x = 0, y = 0; for (let k = 0; k < 6; k++) { x |= ((i >> (2 * k)) & 1) << k; y |= ((i >> (2 * k + 1)) & 1) << k; } return [x, y]; };
+  const g = mulberry32(2026), us = Array.from({ length: 150 }, () => g());
+  const g2 = mulberry32(77), block = Math.floor(g2() * 64) * 64, subset = []; while (subset.length < 64) { const v = Math.floor(g2() * 4096); if (!subset.includes(v)) subset.push(v); }
+  const keys = [
+    { name: 'full key: 4,096 leaves', pick: u => Math.floor(u * 4096) },
+    { name: 'pruned, contiguous: 64 leaves', pick: u => block + Math.floor(u * 64) },
+    { name: 'pruned, scattered: 64 leaves', pick: u => subset[Math.floor(u * 64)] },
+  ];
+  let N = 40;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, gs = narrow ? Math.min(w - 32, (h - 40 * 3) / 3) : Math.min((w - 64) / 3, h - 76), cs = gs / 64;
+    const res = keys.map((k, idx) => {
+      const gx = narrow ? (w - gs) / 2 : 16 + idx * (gs + 16), gy = narrow ? 26 + idx * (gs + 40) : 62;
+      ctx.fillStyle = tok('bg-3'); ctx.fillRect(gx, gy, gs, gs);
+      font(ctx, 12, 'sans', 600); ctx.fillStyle = tok('fg-2'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(k.name, gx, gy - 6);
+      const hits = new Map(); us.slice(0, N).forEach(u => { const i = k.pick(u); hits.set(i, (hits.get(i) || 0) + 1); });
+      let rep = 0;
+      hits.forEach((c, i) => { const [x, y] = cellOf(i); if (c > 1) rep++; ctx.fillStyle = tok(c > 1 ? 'red' : 'yellow'); const m = Math.max(2.5, cs * 1.6);
+        ctx.fillRect(gx + (x + .5) * cs - m / 2, gy + (y + .5) * cs - m / 2, m, m); });
+      return rep;
+    });
+    out.textContent = `${N} signatures · repeated leaves: full ${res[0]}, contiguous ${res[1]}, scattered ${res[2]} · contiguous: all inside one 8×8 block`;
+  });
+  range($('#ob-n'), v => { N = v; paint(); });
 })();
 
 </script>
