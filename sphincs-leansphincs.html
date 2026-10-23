@@ -342,7 +342,7 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
 
   <section>
     <h2 id="lifetime"><span class="num">7</span>Why a key wears out</h2>
-    <p>Each FORS signature puts \(k\) secrets in public, and they never go away. A forger wins by finding a new message whose FORS indices all point at revealed secrets. Four figures build that risk up: one leaf of the toy key, the odds as a product, the real 24 trees, and the leaves that matter most.</p>
+    <p>Each FORS signature puts \(k\) secrets in public, and they never go away. A forger wins by finding a new message whose FORS indices all point at revealed secrets. The figures build that risk up in order: one leaf of the toy key, the odds as a product, the real 24 trees, then a whole toy key where some leaves are unluckier than others, its lifetime, and both at real size.</p>
 
     <h3>The forger's game on one leaf</h3>
     <p>Figure 9 takes the toy FORS of leaf 0. Three messages land on that leaf and are signed. Then a forger hashes candidate messages until one points only at <span class="c-red">revealed</span> secrets.</p>
@@ -385,7 +385,19 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
 
   <section>
     <h3>The unlucky leaves set the security</h3>
-    <p>Signatures land on random leaves, so after \(N\) signatures the average leaf has signed \(\lambda = N/2^{26}\) times, but some have signed far more: a leaf has \(r\) signatures with the Poisson probability \(e^{-\lambda}\lambda^{r}/r!\). A forgery try also lands on a random leaf, so its success chance is Example 1 averaged over leaves. Heavy leaves are rare but much weaker. Figure 11 puts both costs in bits.</p>
+    <p>So far we looked at one leaf. A key has many, and signatures land on them at random, so some leaves sign far more often than others. Figure 11 runs this on a toy key of 16 leaves, each with its own toy FORS, and signs 32 messages.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-unlucky" aria-labelledby="cap-unlucky">
+    <div class="stage">
+      <canvas data-aspect="0.68" data-aspect-narrow="1.5" role="img" aria-label="A toy key of 16 leaves, each with a FORS card of 3 columns of 8 secrets. 32 signatures land on random leaves and turn secrets red. Leaf 6 gets 9 signatures and is 49% forgeable; a typical leaf with 2 is 1.6% forgeable. Bars show each leaf's forge chance; their average is 4.4%, 70% of it from leaf 6."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-unlucky"><b>Figure 11.</b> 32 signatures on a 16-leaf toy key, 2 per leaf on average. Leaf 6 got 9: a forgery try landing there succeeds 49% of the time, against 1.6% on a typical leaf with 2. A try lands on a random leaf, so the forger's chance is the average bar, 4.4%, and leaf 6 supplies 70% of it.</figcaption>
+  </figure>
+
+  <section>
+    <p>The real key behaves the same way with \(2^{26}\) leaves and 24 trees of 1,024 secrets. After \(N\) signatures the average leaf has signed \(\lambda = N/2^{26}\) times, and a leaf has signed \(r\) times with the Poisson probability \(e^{-\lambda}\lambda^{r}/r!\). Figure 12 weighs, for each \(r\), how rare such a leaf is against how easy it is to forge, both in bits. Their sum is a valley, and its bottom marks the leaves that dominate the forger's chance, as leaf 6 did in Figure 11.</p>
   </section>
 
   <figure class="fig wide" id="fig-valley" aria-labelledby="cap-valley">
@@ -396,12 +408,27 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
     <div class="controls">
       <label>log₂ N <input id="vl-n" type="range" min="24" max="33" step="0.5" value="30"><output for="vl-n">30</output></label>
     </div>
-    <figcaption id="cap-valley"><b>Figure 11.</b> At \(N = 2^{30}\) the average leaf has 16 signatures and costs \(2^{144}\) tries to forge. One leaf in \(2^{13.8}\) has 33 and costs \(2^{119.5}\). The sum of the two costs forms a valley; its bottom near \(r = 33\) dominates, and over all \(r\) the security is 129.8 bits. <span class="src"><i>model</i> leanSphincs note, cover rule</span></figcaption>
+    <figcaption id="cap-valley"><b>Figure 12.</b> At \(N = 2^{30}\) the average leaf has 16 signatures and costs \(2^{144}\) tries to forge. One leaf in \(2^{13.8}\) has 33 and costs \(2^{119.5}\). The sum of the two costs forms a valley; its bottom near \(r = 33\) dominates, and over all \(r\) the security is 129.8 bits. <span class="src"><i>model</i> leanSphincs note, cover rule</span></figcaption>
   </figure>
 
   <section>
     <h3>The lifetime</h3>
-    <p>Repeat Figure 11 for every \(N\). The lifetime is the largest \(N\) that keeps 127 bits, the NIST level 1 target the leanSphincs note uses (Figure 12).</p>
+    <p>Every new signature fills more of the FORS cards, the bars of Figure 11 grow, and so does their average. The lifetime is the number of signatures a key can make before the forger's chance per try passes a target. Figure 13 does this on the toy key with a toy target of 6 bits, a chance of 1 in 64 per try.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-toylife" aria-labelledby="cap-toylife">
+    <div class="stage">
+      <canvas data-aspect="0.6" data-aspect-narrow="1.25" role="img" aria-label="The 16-leaf toy key after N signatures: FORS cards fill with red, per-leaf forge-chance bars grow, and the key's security in bits falls below the 6-bit toy target after 17 signatures."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>signatures N <input id="tl-n" type="range" min="1" max="96" value="17"><output for="tl-n">17</output></label>
+    </div>
+    <figcaption id="cap-toylife"><b>Figure 13.</b> Drag \(N\). The cards fill, the bars grow, and the key's security, \(-\log_2\) of the average bar, falls. The toy key stays above its 6-bit target up to 17 signatures: that is its lifetime.</figcaption>
+  </figure>
+
+  <section>
+    <p>The real key follows the same rule with a 127-bit target, the NIST level 1 target the leanSphincs note uses (Figure 14).</p>
   </section>
 
   <figure class="fig wide" id="fig-life" aria-labelledby="cap-life">
@@ -412,30 +439,30 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
     <div class="controls">
       <label>log₂ N <input id="lf-n" type="range" min="12" max="34" step="0.25" value="30"><output for="lf-n">30</output></label>
     </div>
-    <figcaption id="cap-life"><b>Figure 12.</b> Security of leanSphincs as signatures accumulate. The full tree keeps 127 bits up to \(1.20 \cdot 10^{9}\) signatures, just over \(2^{30}\). The lower curves are pruned keys (Section 9). These are cover-rule estimates; the lifetimes proved in Lean <span class="src"><i>proposal</i> leanSphincs note</span> are 4 to 13% lower.</figcaption>
+    <figcaption id="cap-life"><b>Figure 14.</b> Security of leanSphincs as signatures accumulate. The full tree keeps 127 bits up to \(1.20 \cdot 10^{9}\) signatures, just over \(2^{30}\). The lower curves are pruned keys (Section 9). These are cover-rule estimates; the lifetimes proved in Lean <span class="src"><i>proposal</i> leanSphincs note</span> are 4 to 13% lower.</figcaption>
   </figure>
 
   <section>
     <h2 id="variants"><span class="num">8</span>Same layers, different shapes: the variants</h2>
-    <p>Every variant has the three layers of Figure 1. They differ in how the tree is built and how big FORS is. SLH-DSA-128s <span class="src"><i>NIST</i> FIPS 205</span> targets \(2^{64}\) signatures, too many leaves to build as one tree, so it stacks 7 trees of height 9 into a <em>hypertree</em>: each tree's WOTS keys sign the roots of the trees below. SLH-DSA-128-24 <span class="src"><i>NIST draft</i> SP 800-230</span> targets \(2^{24}\) and uses one tree, and leanSphincs <span class="src"><i>proposal</i> sphincs.art</span> keeps one tree for \(2^{30}\). Figure 13 draws the three shapes.</p>
+    <p>Every variant has the three layers of Figure 1. They differ in how the tree is built and how big FORS is. SLH-DSA-128s <span class="src"><i>NIST</i> FIPS 205</span> targets \(2^{64}\) signatures, too many leaves to build as one tree, so it stacks 7 trees of height 9 into a <em>hypertree</em>: each tree's WOTS keys sign the roots of the trees below. SLH-DSA-128-24 <span class="src"><i>NIST draft</i> SP 800-230</span> targets \(2^{24}\) and uses one tree, and leanSphincs <span class="src"><i>proposal</i> sphincs.art</span> keeps one tree for \(2^{30}\). Figure 15 draws the three shapes.</p>
   </section>
 
   <figure class="fig wide" id="fig-shapes" aria-labelledby="cap-shapes">
     <div class="stage">
       <svg class="plot" viewBox="0 0 720 300" role="img" aria-label="Three tree shapes: FIPS 205 SLH-DSA-128s as 7 stacked trees of height 9 with 7 WOTS signatures; SP 800-230 SLH-DSA-128-24 as one tree of height 22 over FORS of 6 trees of height 24; leanSphincs as one tree of height 26 over FORS of 24 trees of height 10."></svg>
     </div>
-    <figcaption id="cap-shapes"><b>Figure 13.</b> Three shapes of the same idea. The hypertree carries one WOTS signature per layer, 7 in all. The single-tree variants carry one. SP 800-230 uses 6 very tall FORS trees, so a signer hashes about \(6 \cdot 2^{24} \approx 10^{8}\) FORS leaves per signature; leanSphincs uses 24 short ones, \(24 \cdot 2^{10} = 24{,}576\) leaves.</figcaption>
+    <figcaption id="cap-shapes"><b>Figure 15.</b> Three shapes of the same idea. The hypertree carries one WOTS signature per layer, 7 in all. The single-tree variants carry one. SP 800-230 uses 6 very tall FORS trees, so a signer hashes about \(6 \cdot 2^{24} \approx 10^{8}\) FORS leaves per signature; leanSphincs uses 24 short ones, \(24 \cdot 2^{10} = 24{,}576\) leaves.</figcaption>
   </figure>
 
   <section>
-    <p>Figure 14 compares sizes. SLH-DSA-128-24 is smallest, but its FORS trees have height 24, so the signer hashes 16.8 million leaves per tree. leanSphincs's trees have 1,024 leaves, and its whole FORS signing costs about 61,000 compressions.</p>
+    <p>Figure 16 compares sizes. SLH-DSA-128-24 is smallest, but its FORS trees have height 24, so the signer hashes 16.8 million leaves per tree. leanSphincs's trees have 1,024 leaves, and its whole FORS signing costs about 61,000 compressions.</p>
   </section>
 
   <figure class="fig wide" id="fig-sizes" aria-labelledby="cap-sizes">
     <div class="stage">
       <svg class="plot" viewBox="0 0 680 330" role="img" aria-label="Stacked bars of signature size by source: FIPS 205 SLH-DSA-128s 7,856 bytes, sphincs.art leanSphincs 5,684, sig.golf best entry 5,239, leanSphincs with WOTS forest 4,276, SP 800-230 SLH-DSA-128-24 3,856."></svg>
     </div>
-    <figcaption id="cap-sizes"><b>Figure 14.</b> Signature bytes by layer and by source. The sig.golf bar is the best-scoring entry on 22 October 2026; its layers vary by submission.</figcaption>
+    <figcaption id="cap-sizes"><b>Figure 16.</b> Signature bytes by layer and by source. The sig.golf bar is the best-scoring entry on 22 October 2026; its layers vary by submission.</figcaption>
   </figure>
 
   <section>
@@ -444,7 +471,7 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
 
   <section>
     <h2 id="pruning"><span class="num">9</span>Pruning: build only part of the tree</h2>
-    <p>A full leanSphincs key has \(2^{26}\) leaves to generate: about \(16 \cdot 10^{9}\) compressions, 16 seconds on a laptop and about 6 days on a hardware wallet. Hypertree pruning <span class="src"><i>blog</i> conduition</span> builds one subtree of \(2^{b}\) leaves and fills the missing siblings above it with pseudorandom surrogates. The root looks like any other public key (Figure 15).</p>
+    <p>A full leanSphincs key has \(2^{26}\) leaves to generate: about \(16 \cdot 10^{9}\) compressions, 16 seconds on a laptop and about 6 days on a hardware wallet. Hypertree pruning <span class="src"><i>blog</i> conduition</span> builds one subtree of \(2^{b}\) leaves and fills the missing siblings above it with pseudorandom surrogates. The root looks like any other public key (Figure 17).</p>
   </section>
 
   <figure class="fig wide" id="fig-prune" aria-labelledby="cap-prune">
@@ -452,11 +479,11 @@ svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
       <canvas data-aspect="0.5" data-aspect-narrow="1.0" role="img" aria-label="A tree of 32 leaves where only a 4-leaf subtree is built; three surrogate siblings complete the root; the signer retries R until the message lands in the subtree."></canvas>
       <div class="try">Play, scrub, or step with ← →</div>
     </div>
-    <figcaption id="cap-prune"><b>Figure 15.</b> A toy tree of height 5 pruned to a subtree of height \(b = 2\). The signer retries \(R\) until the digest picks a leaf in the subtree, \(2^{5-2} = 8\) tries on average. All signatures share 4 leaves instead of 32, so each FORS is used 8 times more often and the key wears out sooner.</figcaption>
+    <figcaption id="cap-prune"><b>Figure 17.</b> A toy tree of height 5 pruned to a subtree of height \(b = 2\). The signer retries \(R\) until the digest picks a leaf in the subtree, \(2^{5-2} = 8\) tries on average. All signatures share 4 leaves instead of 32, so each FORS is used 8 times more often and the key wears out sooner.</figcaption>
   </figure>
 
   <section>
-    <p>Every retry costs one compression, \(2^{26-b}\) on average, and every FORS sees \(2^{26-b}\) times more signatures, which shifts Figure 12's curve left. The leanSphincs proposal picks three points on that trade <span class="src"><i>proposal</i> sphincs.art</span>:</p>
+    <p>Every retry costs one compression, \(2^{26-b}\) on average, and every FORS sees \(2^{26-b}\) times more signatures, which shifts Figure 14's curve left. The leanSphincs proposal picks three points on that trade <span class="src"><i>proposal</i> sphincs.art</span>:</p>
     <div class="tablewrap">
     <table class="tiers">
       <thead><tr><th></th><th>Light</th><th>Standard</th><th>Full</th></tr></thead>
@@ -1734,6 +1761,128 @@ const Label = p => Text({ size: 14, color: 'fg-2', ...p });
   });
   el('text', { x: 8, y: maxY + 8 }, { font: '400 11px var(--sans)', fill: 'var(--muted)' }, 'All heights to one scale: 3.4 px per level. Purple: Merkle trees; teal: WOTS keys; orange: FORS trees.');
   svg.setAttribute('viewBox', `0 0 720 ${maxY + 18}`);
+})();
+
+/* ================= Toy key of 16 leaves, each with its own FORS (k = 3, a = 3) ================= */
+// Signature i is the message "sig i"; the first 16 bits of SHA-256 give the leaf (4 bits) and three FORS indices.
+const KEY16 = (() => {
+  const sigOf = i => { const v = parseInt(sha256(`sig ${i}`).slice(0, 4), 16); return { leaf: v >> 12, f: [(v >> 9) & 7, (v >> 6) & 7, (v >> 3) & 7] }; };
+  const sigs = Array.from({ length: 120 }, (_, i) => sigOf(i));
+  const state = N => {
+    const open = Array.from({ length: 16 }, () => [new Set(), new Set(), new Set()]), cnt = new Array(16).fill(0);
+    sigs.slice(0, N).forEach(({ leaf, f }) => { cnt[leaf]++; f.forEach((i, j) => open[leaf][j].add(i)); });
+    const p = open.map(o => o.reduce((a, s) => a * s.size / 8, 1));
+    return { open, cnt, p, avg: p.reduce((a, b) => a + b, 0) / 16 };
+  };
+  return { sigs, state };
+})();
+const pct = x => x >= .1 ? `${Math.round(100 * x)}%` : `${(100 * x).toFixed(1)}%`;
+
+/* ================= Figure 11: the unlucky leaves, on the toy key ================= */
+(() => {
+  const N = 32, S = KEY16.state(N);
+  const heavy = S.cnt.indexOf(Math.max(...S.cnt)), typical = S.cnt.indexOf(2);
+  const opts = n => n ? { x: [0, 32], y: [-8.6, 13.4], pad: 8 } : { x: [0, 32], y: [-8, 13.4], pad: 14 };
+  new Scene('#fig-unlucky', opts, sc => {
+    const n = sc.narrow, LX = i => 1 + 2 * i;
+    // Merkle tree over the 16 leaves.
+    const TX = (l, i) => 1 + 2 * (i * 2 ** l + (2 ** l - 1) / 2), TY = l => 9 + l * 1.1, tree = [];
+    for (let l = 0; l <= 4; l++) for (let i = 0; i < 16 >> l; i++) {
+      tree.push(sc.add(Dot({ x: TX(l, i), y: TY(l), r: l === 4 ? 6 : l ? 3 : 4, color: l === 4 ? 'blue' : l ? 'muted' : 'teal', opacity: 0 })));
+      if (l) for (const c of [2 * i, 2 * i + 1]) tree.push(sc.add(Line({ x1: TX(l - 1, c), y1: TY(l - 1), x2: TX(l, i), y2: TY(l), color: 'rule', width: 1.2, opacity: 0 })));
+    }
+    // Each leaf's FORS as a card: 3 columns (trees) of 8 secrets.
+    const cell = (L, j, i) => sc.add(Rect({ x: LX(L) - .78 + j * .54, y: 8.2 - (i + 1) * .46, w: .48, h: .4, radius: 1, color: 'rule', width: 0, fill: 'bg-3', opacity: 0, leaf: L }));
+    const cells = Array.from({ length: 16 }, (_, L) => [0, 1, 2].map(j => Array.from({ length: 8 }, (_, i) => cell(L, j, i))));
+    const badges = Array.from({ length: 16 }, (_, L) => sc.add(Text({ x: LX(L), y: 4.2, value: 0, fmt: v => n ? `${Math.round(v)}` : `r=${Math.round(v)}`, size: n ? 10 : 12, font: 'mono', color: 'fg-2', opacity: 0 })));
+    const cardLab = sc.add(Label({ x: 0, y: 4.2, dx: -2, align: 'right', text: '', opacity: 0 }));
+    // Per-leaf forge chance as bars.
+    const BH = 2.6, bars = S.p.map((p, L) => sc.add(Rect({ x: LX(L) - .5, y: .6, w: 1, h: .001, color: 'red', width: 0, fill: 'red', radius: 2, opacity: 0, target: p })));
+    const barBase = sc.add(Line({ x1: .2, y1: .6, x2: 31.8, y2: .6, color: 'rule', width: 1.2, opacity: 0 }));
+    const barLab = sc.add(Label({ x: .2, y: 3.6, align: 'left', text: 'chance that a forgery try on this leaf succeeds', size: n ? 10 : 12, color: 'red', opacity: 0 }));
+    const avgLine = sc.add(Line({ x1: .2, y1: .6 + BH * S.avg / S.p[heavy], x2: 31.8, y2: .6 + BH * S.avg / S.p[heavy], color: 'fg', width: 1.6, dash: [5, 4], opacity: 0 }));
+    const avgLab = sc.add(Label({ x: 31.8, y: .6 + BH * S.avg / S.p[heavy], dy: -9, align: 'right', text: `average ${pct(S.avg)} = 2^-${(-Math.log2(S.avg)).toFixed(1)}`, size: n ? 10 : 12, color: 'fg', weight: 600, opacity: 0 }));
+    // Zoom: a typical leaf and the heaviest leaf, drawn as real FORS trees.
+    const zoom = (L, cx) => {
+      const objs = [], X = (j, l, i) => cx - 6 + 4.2 * j + .5 * (i * 2 ** l + (2 ** l - 1) / 2), Y = l => -6.6 + l * .85;
+      for (let j = 0; j < 3; j++) for (let l = 0; l <= 3; l++) for (let i = 0; i < 8 >> l; i++) {
+        objs.push(sc.add(Dot({ x: X(j, l, i), y: Y(l), r: l ? 2.2 : (n ? 2.8 : 4.2), color: !l && S.open[L][j].has(i) ? 'red' : l === 3 ? 'orange' : 'muted', opacity: 0 })));
+        if (l) for (const c of [2 * i, 2 * i + 1]) objs.push(sc.add(Line({ x1: X(j, l - 1, c), y1: Y(l - 1), x2: X(j, l, i), y2: Y(l), color: 'rule', width: 1, opacity: 0 })));
+      }
+      const frac = S.open[L].map(s => `${s.size}/8`).join(' · ');
+      objs.push(sc.add(Label({ x: cx, y: -3.2, text: `leaf ${L}: ${S.cnt[L]} signatures`, size: n ? 11 : 13, weight: 600, color: L === heavy ? 'red' : 'fg-2', opacity: 0 })));
+      objs.push(sc.add(Label({ x: cx, y: -7.6, text: `${frac} = ${pct(S.p[L])}`, size: n ? 11 : 13, font: 'mono', color: L === heavy ? 'red' : 'fg-2', opacity: 0 })));
+      objs.push(sc.add(Path({ pts: [[LX(L), 3.7], [cx, -2.7]], color: 'muted', width: 1, dash: [3, 4], draw: 0 })));
+      return objs;
+    };
+    const zA = zoom(typical, 8), zB = zoom(heavy, 24);
+
+    linesFirst(sc);
+    sc.play('A toy key: 16 leaves under one root, and under each leaf its own FORS: 3 trees of 8 secrets, drawn as 3 columns.', [lagged([tree.map(fadeIn), cells.flat(2).map(fadeIn), badges.map(fadeIn)], .5)], 1.6);
+    sc.play(`Sign ${N} messages. Each lands on a random leaf and reveals one secret in each column of that leaf's FORS.`,
+      [lagged(KEY16.sigs.slice(0, N).map(({ leaf, f }, s) => {
+        const before = KEY16.sigs.slice(0, s).filter(x => x.leaf === leaf).length;
+        return [to(f.map((i, j) => cells[leaf][j][i]), { fill: 'red' }), to(badges[leaf], { value: before + 1 }, { value: before }), indicate(badges[leaf])];
+      }), 0)], 4.2, ease.linear);
+    sc.play(`That is ${N / 16} signatures per leaf on average, but the counts scatter: leaf ${heavy} got ${S.cnt[heavy]}, and ${S.cnt.filter(c => c === 0).length} leaves got none.`,
+      [to(badges[heavy], { color: 'red', size: n ? 12 : 15 }), indicate(cells[heavy].flat())], 1.2);
+    sc.play(`Zoom in. Leaf ${typical} has revealed ${S.open[typical].map(s => s.size).join(', ')} secrets per tree: a forgery try that lands there succeeds with probability ${pct(S.p[typical])}.`, [create(zA.filter(o => o.pts)), lagged(zA.filter(o => !o.pts).map(fadeIn), .02)], 1.4);
+    sc.play(`Leaf ${S.cnt[heavy] > 1 ? heavy : heavy} has revealed ${S.open[heavy].map(s => s.size).join(', ')}: a try that lands there succeeds with probability ${pct(S.p[heavy])}.`, [create(zB.filter(o => o.pts)), lagged(zB.filter(o => !o.pts).map(fadeIn), .02)], 1.4);
+    sc.play('A forgery try lands on a random leaf too. Draw each leaf\'s success chance as a bar.', [fadeIn([barBase, barLab]), lagged(bars.map(b => to(b, { opacity: 1, h: Math.max(.001, BH * b.target / S.p[heavy]) })), .3)], 1.5);
+    sc.play(`The forger's chance per try is the average bar, ${pct(S.avg)}. Leaf ${heavy} alone supplies ${Math.round(100 * S.p[heavy] / (16 * S.avg))}% of it: the rare unlucky leaves set the security.`,
+      [fadeIn([avgLine, avgLab]), indicate(bars[heavy])], 1.4);
+  });
+})();
+
+/* ================= Figure 13: the toy key's lifetime ================= */
+(() => {
+  const fig = $('#fig-toylife'), canvas = $('canvas', fig), out = $('.readout', fig), TARGET = 6, NMAX = 96;
+  const curve = Array.from({ length: NMAX + 1 }, (_, N) => { const a = KEY16.state(N).avg; return a ? -Math.log2(a) : Infinity; });
+  let life = 0; for (let N = 1; N <= NMAX; N++) { if (curve[N] >= TARGET) life = N; else break; }
+  let N = 17;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, S = KEY16.state(N), pad = 14, slot = (w - 2 * pad) / 16;
+    // Cards: each leaf's FORS (3 columns × 8 secrets), its count, and its forge-chance bar.
+    // The Merkle tree over the 16 leaves, then each leaf's FORS card under it.
+    const treeT = narrow ? 10 : 40, treeH = narrow ? 44 : 64, lx = (l, i) => pad + slot * (i * 2 ** l + 2 ** l / 2), ly = l => treeT + treeH - l * treeH / 4;
+    for (let l = 1; l <= 4; l++) for (let i = 0; i < 16 >> l; i++) for (const c of [2 * i, 2 * i + 1]) {
+      ctx.strokeStyle = tok('rule'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(lx(l - 1, c), ly(l - 1)); ctx.lineTo(lx(l, i), ly(l)); ctx.stroke(); }
+    for (let l = 0; l <= 4; l++) for (let i = 0; i < 16 >> l; i++) { ctx.fillStyle = tok(l === 4 ? 'blue' : l ? 'muted' : 'teal'); ctx.beginPath(); ctx.arc(lx(l, i), ly(l), l === 4 ? 5 : 3, 0, 2 * Math.PI); ctx.fill(); }
+    const cw = Math.min(narrow ? 5.5 : 9, slot / 3.6), ch = Math.min(narrow ? 5 : 8, cw * .9), top = treeT + treeH + 10, cardH = 8 * (ch + 1);
+    const pmax = Math.max(.05, ...S.p), barTop = top + cardH + 22, barH = narrow ? 50 : 70;
+    for (let L = 0; L < 16; L++) {
+      const cx = pad + slot * (L + .5);
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = tok(S.open[L][j].has(i) ? 'red' : 'bg-3');
+        ctx.fillRect(cx + (j - 1.5) * (cw + 1), top + (7 - i) * (ch + 1), cw, ch);
+      }
+      font(ctx, narrow ? 10 : 11, 'mono'); ctx.fillStyle = tok(S.cnt[L] === Math.max(...S.cnt) ? 'red' : 'muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(S.cnt[L], cx, top + cardH + 4);
+      const bh = barH * S.p[L] / pmax; ctx.fillStyle = tok('red'); ctx.fillRect(cx - slot * .3, barTop + barH - bh, slot * .6, bh);
+    }
+    ctx.strokeStyle = tok('rule'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad, barTop + barH + .5); ctx.lineTo(w - pad, barTop + barH + .5); ctx.stroke();
+    const avgY = barTop + barH - barH * S.avg / pmax;
+    ctx.strokeStyle = tok('fg'); ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(pad, avgY); ctx.lineTo(w - pad, avgY); ctx.stroke(); ctx.setLineDash([]);
+    font(ctx, 11, 'sans', 600); ctx.fillStyle = tok('fg'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(`average ${pct(S.avg)}`, w - pad, avgY - 3);
+    // Security of the whole key against N, built from those bars.
+    const L0 = narrow ? 34 : 46, R0 = w - 16, T0 = barTop + barH + 34, B0 = h - 30, YM = 14;
+    const px = x => L0 + x / NMAX * (R0 - L0), py = v => B0 - Math.min(YM, v) / YM * (B0 - T0);
+    font(ctx, 11, 'mono'); ctx.fillStyle = tok('muted'); ctx.textBaseline = 'middle';
+    for (let v = 0; v <= YM; v += 2) { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(L0, py(v)); ctx.lineTo(R0, py(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(v, L0 - 5, py(v)); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (let x = 0; x <= NMAX; x += 16) ctx.fillText(x, px(x), B0 + 4);
+    font(ctx, 11, 'sans'); ctx.fillText('signatures N', (L0 + R0) / 2, B0 + 16); ctx.textAlign = 'left'; ctx.fillText('bits of security', L0, T0 - 16);
+    ctx.strokeStyle = tok('red'); ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(L0, py(TARGET)); ctx.lineTo(R0, py(TARGET)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = tok('red'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(`toy target ${TARGET} bits`, R0, py(TARGET) - 2);
+    ctx.strokeStyle = tok('blue'); ctx.lineWidth = 2.4; ctx.beginPath();
+    curve.forEach((v, x) => { if (!isFinite(v)) return; x && isFinite(curve[x - 1]) ? ctx.lineTo(px(x), py(v)) : ctx.moveTo(px(x), py(v)); }); ctx.stroke();
+    ctx.fillStyle = tok('blue'); ctx.beginPath(); ctx.arc(px(life), py(curve[life]), 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; font(ctx, 11, 'sans', 600); ctx.textBaseline = 'bottom'; ctx.fillText(`lifetime: ${life}`, px(life) + 8, py(curve[life]) - 8);
+    const cur = curve[N];
+    ctx.strokeStyle = tok('yellow'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px(N), T0); ctx.lineTo(px(N), B0); ctx.stroke();
+    if (isFinite(cur)) { ctx.fillStyle = tok('yellow'); ctx.beginPath(); ctx.arc(px(N), py(cur), 5, 0, 2 * Math.PI); ctx.fill(); }
+    out.textContent = `N = ${N} · average chance ${pct(S.avg)} · security ${isFinite(cur) ? cur.toFixed(1) : '∞'} bits · ${isFinite(cur) && cur >= TARGET ? 'still above' : 'below'} the ${TARGET}-bit target`;
+  });
+  range($('#tl-n'), v => { N = v; paint(); });
 })();
 
 </script>
