@@ -1,0 +1,1531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decoupled Consensus</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script>
+  // MathJax: SVG output needs no font files, so it works under the artifact CSP.
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'local' },   // local: each SVG carries its glyphs, so Tex() can draw it into a canvas
+    options: { skipHtmlTags: ['script', 'style', 'textarea', 'svg', 'canvas'] }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js"></script>
+<style>
+/* Layout: one reading column (~66ch); figures break out to a wider band; sticky contents rail on wide screens.
+   Dark-first "slate" ground, light "paper" variant. Semantic hues keep ONE meaning across the whole page. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --bg-2: #151a22;        /* figure stage, callouts */
+  --bg-3: #1d2330;        /* controls, hover */
+  --fg: #e7e9ef;
+  --fg-2: #b4bccb;        /* secondary text */
+  --muted: #7d8699;       /* captions, axis labels */
+  --rule: #273042;
+  --grid: #1f2633;        /* faint grid lines in figures */
+  --blue: #58c4dd;
+  --teal: #5cd0b3;
+  --green: #83c167;
+  --yellow: #f2d45c;
+  --orange: #ff9b54;
+  --red: #fc6255;
+  --purple: #b48ee8;
+  --focus: #f2d45c;
+  --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --col: 41rem;           /* reading measure */
+  --wide: 62rem;          /* figure band */
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+    --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+    --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+    --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+  --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+  --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+  --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 1.125rem/1.68 var(--serif);
+  font-optical-sizing: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 6rem;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+
+/* ---------- page frame ---------- */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.page > * { width: 100%; max-width: var(--col); min-width: 0; }
+.page > .wide { max-width: var(--wide); }
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 3px; width: 0; background: var(--blue); z-index: 11; }
+
+/* contents rail (wide screens only) */
+.toc { display: none; }
+@media (min-width: 1280px) {
+  .toc { display: block; position: fixed; top: calc(5rem + env(safe-area-inset-top, 0px)); left: max(24px, calc((100vw - var(--wide)) / 2 - 15rem)); width: 13rem;
+         font: 500 .8rem/1.4 var(--sans); }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; counter-reset: s; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding-left: .7rem; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--fg); }
+  .toc a[aria-current="true"] { color: var(--fg); border-left-color: var(--blue); }
+}
+
+/* ---------- type ---------- */
+header.hero { padding-block: 4.5rem 1.5rem; }
+.kicker { font: 600 .78rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin: 0 0 1rem; }
+h1 { font: 700 clamp(2.3rem, 6vw, 3.6rem)/1.06 var(--serif); letter-spacing: -.015em; margin: 0 0 1rem; text-wrap: balance; }
+.lede { font-size: 1.3rem; line-height: 1.55; color: var(--fg-2); margin: 0; text-wrap: pretty; }
+h2 { font: 700 1.9rem/1.15 var(--serif); letter-spacing: -.01em; margin: 4.5rem 0 1rem; text-wrap: balance; scroll-margin-top: 2rem; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: .5rem; }
+h3 { font: 600 1.25rem/1.3 var(--serif); margin: 2.4rem 0 .6rem; text-wrap: balance; }
+p { margin: 0 0 1.1rem; text-wrap: pretty; }
+a { color: var(--blue); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+code, kbd { font: 400 .88em/1 var(--mono); background: var(--bg-3); padding: .12em .35em; border-radius: 4px; }
+dfn { font-style: normal; font-weight: 600; }
+.mjx-display, mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding-block: .25rem; }
+
+/* semantic colour classes: the same hue means the same object in prose, math and figures */
+.c-blue { color: var(--blue); } .c-teal { color: var(--teal); } .c-green { color: var(--green); }
+.c-yellow { color: var(--yellow); } .c-orange { color: var(--orange); } .c-red { color: var(--red); } .c-purple { color: var(--purple); }
+
+/* ---------- prerequisites box ---------- */
+.prereq { font: 400 .95rem/1.55 var(--sans); color: var(--fg-2); border-block: 1px solid var(--rule); padding-block: 1rem; margin-block: 2rem; display: grid; gap: .4rem; }
+.prereq b { color: var(--fg); font-weight: 600; }
+
+/* ---------- textbook environments ---------- */
+.env { margin-block: 1.6rem; padding: 1rem 1.2rem; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; }
+.env > .env-head { font: 600 .78rem/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .6rem; color: var(--muted); }
+.env > :last-child { margin-bottom: 0; }
+.env.def > .env-head { color: var(--blue); }
+.env.thm > .env-head { color: var(--purple); }
+.env.ex  > .env-head { color: var(--green); }
+.env.warn > .env-head { color: var(--red); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: .5rem; }
+.steps > li::before { content: "Step " counter(st); font: 600 .78rem/2.1 var(--sans); color: var(--muted); }
+
+details.check { margin-block: 1.6rem; border: 1px dashed var(--rule); border-radius: 8px; padding: .9rem 1.2rem; }
+details.check > summary { cursor: pointer; font: 600 .95rem/1.4 var(--sans); list-style: none; }
+details.check > summary::before { content: "Check yourself · "; color: var(--yellow); }
+details.check[open] > summary { margin-bottom: .7rem; }
+details.check .answer { border-top: 1px solid var(--rule); padding-top: .7rem; }
+
+/* ---------- figures ---------- */
+figure.fig { margin: 2.2rem 0 2.6rem; }
+.fig .stage { position: relative; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.fig canvas, .fig svg.plot { display: block; width: 100%; height: auto; max-width: 100%; touch-action: none; }
+.fig .try { position: absolute; top: .7rem; left: .9rem; font: 500 .78rem/1.3 var(--sans); color: var(--muted); pointer-events: none; }
+.fig .readout { position: absolute; top: .7rem; right: .9rem; font: 500 .85rem/1.45 var(--mono); color: var(--fg-2); text-align: right; font-variant-numeric: tabular-nums; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.2rem; padding: .8rem .2rem 0; font: 500 .85rem/1.2 var(--sans); color: var(--fg-2); }
+.controls label { display: inline-flex; align-items: center; gap: .6rem; }
+.controls output { font-family: var(--mono); color: var(--fg); min-width: 2.5ch; font-variant-numeric: tabular-nums; }
+.btn { font: 600 .82rem/1 var(--sans); color: var(--fg); background: var(--bg-3); border: 1px solid var(--rule); border-radius: 6px; padding: .55rem .8rem; cursor: pointer; min-height: 36px; }
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; }
+input[type="range"] { accent-color: var(--blue); width: 9rem; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.step-label { flex-basis: 100%; font: 400 1rem/1.5 var(--serif); color: var(--fg); min-height: 3em; }
+input.scrub { flex: 1 1 10rem; width: auto; min-width: 8rem; accent-color: var(--yellow); }
+[data-focus] { cursor: help; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 4px; border-radius: 3px; }
+[data-focus]:hover, [data-focus]:focus-visible { background: var(--bg-3); }
+figcaption { font: 400 .92rem/1.55 var(--sans); color: var(--fg-2); margin-top: .8rem; max-width: var(--col); }
+figcaption b { color: var(--fg); font-weight: 600; }
+.svg-text { font: 500 13px var(--sans); fill: currentColor; }
+svg.micro { display: inline-block; vertical-align: middle; height: 1.5em; width: auto; margin-inline: .1em; overflow: visible; }
+
+footer.refs { margin-top: 5rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; font: 400 .95rem/1.6 var(--sans); color: var(--fg-2); }
+footer.refs ol { padding-left: 1.2rem; }
+
+@media (max-width: 560px) {
+  body { font-size: 1.05rem; }
+  h2 { font-size: 1.55rem; margin-top: 3.5rem; }
+  .env { padding: .9rem 1rem; }
+  .fig .readout { position: static; padding: .4rem .7rem 0; text-align: left; }
+  .fig .try { position: static; display: block; padding: .6rem .7rem 0; }
+}
+
+.tldr { margin: 0; padding-left: 1.2rem; display: grid; gap: .45rem; font-size: 1.02rem; }
+.remember { padding-left: 1.2rem; display: grid; gap: .4rem; }
+.src { display: inline-block; font: 500 .72rem/1.5 var(--sans); color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--rule); border-radius: 999px; padding: 0 .5rem; white-space: nowrap; vertical-align: .1em; }
+.src i { font-style: normal; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: .62rem; margin-right: .3rem; }
+.fig .stage.scrollx { overflow-x: auto; }
+.fig .stage.scrollx svg { min-width: 720px; }
+.here-row { display: flex; gap: 1.1rem; align-items: flex-start; }
+.here-row > p { min-width: 0; margin: 0; }
+svg.here { flex: 0 0 70px; width: 70px; height: auto; margin-top: .3rem; }
+</style>
+
+<div class="progress" aria-hidden="true"></div>
+<nav class="toc" aria-label="Contents"><ol></ol></nav>
+
+<main class="page">
+  <header class="hero">
+    <p class="kicker">Ethereum consensus, from Gasper to EIP-8453</p>
+    <h1>Decoupled consensus</h1>
+    <p class="lede">Today every Ethereum vote does two jobs at once: it picks the head of the chain and it moves the chain towards finality. Decoupled consensus splits that vote in two. A small committee keeps the chain moving every slot, and the whole validator set finalizes on its own clock. This page shows the whole design in one picture, then opens each part.</p>
+  </header>
+
+  <div class="env thm">
+    <p class="env-head">The 30-second version</p>
+    <ol class="tldr">
+      <li>Today one attestation carries a <span class="c-yellow">head vote</span> and a <span class="c-purple">finality vote</span>, so finality advances at the pace of 32-slot epochs: about 16 minutes on average.</li>
+      <li>Decoupled consensus runs two protocols side by side. The <b>available chain</b> (Goldilocks) uses a committee of about 512 to 1,024 per slot to choose and <span class="c-green">confirm</span> the head. The <b>finality gadget</b> asks every validator to vote once per round of 8 slots, and <span class="c-teal">justifies</span> then <span class="c-blue">finalizes</span> a block as soon as two thirds agree.</li>
+      <li>The available chain stays live when many validators are offline; the finality gadget stays safe when the network splits. Ethereum gets both, on two layers.</li>
+      <li>Expected gain: finality in under 4 minutes at today's validator count, with a path to under a minute through consolidation, one-round finality and better aggregation. Status: draft EIP-8453, a Python spec in progress, Lean proofs, a Prysm prototype and devnets.</li>
+    </ol>
+  </div>
+
+  <div class="prereq">
+    <div><b>You need:</b> the idea of a blockchain as blocks pointing to parents, validators who sign votes, and a fork-choice rule that picks one chain among branches.</div>
+    <div><b>You will build:</b> both layers of decoupled consensus, the reason they must be separate, how fast finality gets, and what is still open.</div>
+  </div>
+
+  <section>
+    <h2 id="map"><span class="num">1</span>The whole design in one picture</h2>
+    <p>Figure 1 runs one round of 8 slots on a toy network of 64 validators. The top lane is the <b>available chain</b>: one block per slot, and a small <span class="c-yellow">committee</span> that votes for the head every slot. The bottom lane is the <b>finality gadget</b>: the whole validator set, split into 8 cohorts, one cohort voting in each slot. Watch three tips appear on the same chain.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-map" aria-labelledby="cap-map">
+    <div class="stage">
+      <canvas data-aspect="0.58" data-aspect-narrow="1.2" role="img" aria-label="Two lanes over one round of 8 slots. Top: blocks with a small committee voting every slot; a block gets confirmed and locked. Bottom: 64 validators in 8 cohorts, one cohort attesting per slot; at two thirds the target is justified, and a later quorum finalizes it. The chain ends with three tips: finalized, confirmed, head."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-map"><b>Figure 1.</b> Decoupled consensus in one round. The available chain moves every slot and <span class="c-green">confirms</span> the head within seconds. The finality gadget collects one vote per validator per round; at two thirds it <span class="c-teal">justifies</span> its target, and a second quorum <span class="c-blue">finalizes</span> it. Toy sizes: 64 validators, committees of 8. <span class="src"><i>spec</i> EIP-8453 draft</span> <span class="src"><i>spec</i> Goldilocks</span></figcaption>
+  </figure>
+
+  <section>
+    <p>The chain now has three tips. The <b>head</b> is the newest block and can still change. The <span class="c-green">confirmed</span> tip comes a few seconds later and is protected by locks. The <span class="c-blue">finalized</span> tip can never change, short of a third of all stake being slashed, but comes last. Each is an ancestor of the next. The rest of the page explains each lane and the narrow interface between them.</p>
+  </section>
+
+  <section>
+    <h2 id="who"><span class="num">2</span>Where the design comes from</h2>
+    <p>Decoupled consensus is the result of four years of research, and its documents are at different stages: research posts, a workshop, a draft EIP, a spec in progress. Figure 2 places them. A grey tag such as <span class="src"><i>spec</i> consensus-specs</span> or <span class="src"><i>workshop</i> Cambridge, Yann</span> names the source of every number below.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-family" aria-labelledby="cap-family">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 900 400" role="img" aria-label="Timeline from 2022 to the I* fork: single-slot finality post, Goldfish and RLMD-GHOST research, the 2026 ethresear.ch posts, EF blog posts, the Cambridge workshop in October 2026, the draft EIP-8453 and spec, Devcon, and the I* fork."></svg>
+    </div>
+    <figcaption id="cap-family"><b>Figure 2.</b> From single-slot finality to EIP-8453. Research on top, public writing in the middle, specification and code at the bottom. The draft EIP was opened in October 2026 mainly to reserve its number; the workshop decks still list writing it as a to-do. On a phone, scroll sideways.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="today"><span class="num">3</span>Why finality is slow today</h2>
+    <p>Ethereum runs Gasper: LMD-GHOST chooses the head, Casper FFG finalizes. Slots last 12 seconds and an epoch is 32 slots. Each validator attests once per epoch, in one of 32 committees, and its single attestation carries both a head vote and an FFG vote <span class="src"><i>blog</i> Upgrading Finality 1</span>. FFG needs two rounds of two-thirds votes, one to justify a checkpoint and one to finalize it, and a round is an epoch (Figure 3).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-gasper" aria-labelledby="cap-gasper">
+    <div class="stage">
+      <canvas data-aspect="0.36" data-aspect-narrow="0.9" role="img" aria-label="Three epochs of 32 slots. Each slot one thirty-second of the validators attest. After epoch 1 the checkpoint is justified, after epoch 2 it is finalized: 768 seconds at best, about 960 seconds on average."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-gasper"><b>Figure 3.</b> Gasper today. One thirty-second of the validators attests per slot, so two thirds of the stake is only heard after most of an epoch. A transaction waits for the next checkpoint, then two epochs: \(2 \cdot 32 \cdot 12 = 768\) s at best, about 960 s on average. <span class="src"><i>blog</i> Upgrading Finality 1</span></figcaption>
+  </figure>
+
+  <section>
+    <p>Why not shrink the epoch? Because the committee size ties slot time to finality time. Figure 4 shows the three choices. Smaller committees aggregate faster and allow shorter slots, but the whole set then needs more slots to speak. Larger committees speak faster, but aggregating them stretches every slot. Single-slot finality sits at the far end, with the whole set voting every slot <span class="src"><i>post</i> Francesco, ethresear.ch</span> <span class="src"><i>workshop</i> Cambridge, Roberto</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-dilemma" aria-labelledby="cap-dilemma">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 720 330" role="img" aria-label="Three rows: today with 1/32 committees, 12 s slots and 32-slot rounds; smaller committees with 6 s slots and 96-slot epochs, slower finality; larger committees with 16-slot epochs but longer slots. A fourth row shows decoupling: short slots with small committees, and a separate full-set round underneath."></svg>
+    </div>
+    <figcaption id="cap-dilemma"><b>Figure 4.</b> The coupling dilemma. With one vote doing both jobs, any committee size trades slot time against finality time. Decoupling cuts the knot: a small committee per slot for the head, a separate full-set round for finality. Figures from Roberto's Cambridge talk. <span class="src"><i>workshop</i> Cambridge, Roberto</span></figcaption>
+  </figure>
+
+  <section>
+    <p>Coupling has two more costs. LMD-GHOST counts every validator's latest vote however old, so an attacker can withhold votes and release them later to reorg honest blocks (ex-ante reorgs) <span class="src"><i>post</i> Francesco</span>. And LMD-GHOST cannot be proven to stay live when participation changes, so the chain's liveness under outages rests on patches rather than a proof <span class="src"><i>post</i> Luca</span>. The available chain fixes both.</p>
+  </section>
+
+  <section>
+    <h2 id="ac"><span class="num">4</span>Layer 1: the available chain</h2>
+    <div class="here-row"><svg class="here" data-on="ac" viewBox="0 0 120 120" role="img" aria-label="You are here: the available chain"></svg>
+    <p>The top lane of Figure 1. Its job is to pick a head every slot, quickly, and to keep going whatever fraction of validators is online. It is <b>Goldfish</b>, a fork choice that forgets old votes, with <b>locks</b> added: Goldilocks, "neither too short nor too long a memory" <span class="src"><i>spec</i> Goldilocks</span>.</p></div>
+
+    <h3>Votes that expire</h3>
+    <p>Goldfish runs GHOST, walking from the root to the child with the most votes, but at slot \(t\) it counts only the votes cast in slot \(t-1\). Figure 5 replays the attack this stops. An adversary withholds its votes for its own hidden block, then releases them late. LMD-GHOST still counts them and the honest block is reorged; Goldfish ignores them because they are a slot old.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-expiry" aria-labelledby="cap-expiry">
+    <div class="stage">
+      <canvas data-aspect="0.46" data-aspect-narrow="1.15" role="img" aria-label="An honest block and a hidden adversary block compete. The adversary releases withheld votes late. Under LMD-GHOST the old votes count and the honest block is reorged; under Goldfish only last-slot votes count and the honest block stays."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-expiry"><b>Figure 5.</b> Vote expiry stops ex-ante reorgs. Withheld votes help the attacker under LMD-GHOST, which counts every latest vote. Under Goldfish, votes older than one slot no longer count, so releasing them late does nothing. <span class="src"><i>post</i> Francesco</span> <span class="src"><i>workshop</i> Cambridge, Yann</span></figcaption>
+  </figure>
+
+  <section>
+    <p>The slot is cut into phases of length \(\Delta\), the network delay bound: the proposer publishes at 0, committee members vote at \(\Delta\), votes received by \(2\Delta\) count as support, views freeze at \(3\Delta\). A slot is \(4\Delta\), so 3 s at 12 s slots. The next proposer packs the votes it saw into its block (<b>view-merge</b>), which replaces proposer boost <span class="src"><i>spec</i> Goldilocks</span> <span class="src"><i>spec</i> EIP-8453 draft</span>.</p>
+
+    <h3>Locks: memory that expires</h3>
+    <p>A one-slot memory has a weakness: a single slot of network asynchrony lets the adversary rewrite the chain <span class="src"><i>post</i> Francesco</span>. Earlier designs added a stabilization gadget voted by the whole set. Goldilocks adds <span class="c-green">locks</span> instead. A block is locked when at least half of one slot's whole committee votes for it (fast lock), or when \(k\) consecutive slots confirm it (slow lock). A lock steps back when half the committee votes against it, and expires after \(k\) slots (Figure 6).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-locks" aria-labelledby="cap-locks">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.2" role="img" aria-label="A committee of 8 votes; 5 of 8 support block B, so B is fast-locked. A slot of asynchrony lets the adversary push a fork, but the lock keeps the head on B. Later 5 of 8 oppose B and the lock steps back to A; locks expire after k slots."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-locks"><b>Figure 6.</b> Goldilocks locks on a committee of 8. Half the committee on a block locks it; the lock survives a slot of asynchrony; half the committee against it steps it back; it expires after \(k\) slots. Locks give a few seconds' <span class="c-green">confirmation</span> that is safe under synchrony, with no full-set vote. <span class="src"><i>workshop</i> Cambridge, Francesco</span> <span class="src"><i>spec</i> Goldilocks</span></figcaption>
+  </figure>
+
+  <section>
+    <h3>Staying alive when validators sleep</h3>
+    <p>The available chain is <b>dynamically available</b>: it stays safe and live as long as most of the validators that are <em>awake</em> are honest. Validators that go offline count against nothing <span class="src"><i>post</i> Luca</span>. No single protocol can also stay safe under network partitions: it cannot tell a partition from low participation (the availability–finality dilemma). That is why Ethereum needs two layers, and why the available chain must stay live in outages like May 2023, when a client bug knocked out many validators yet more than 90% of slots still got a block <span class="src"><i>post</i> Luca</span>. Figure 7 sets the participation and shows what each layer does.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-leak" aria-labelledby="cap-leak">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.15" role="img" aria-label="With a fraction of validators offline, the available chain keeps producing blocks while the finality gadget stalls below two thirds. The inactivity leak shrinks the offline validators' weight until the online share reaches two thirds and finality resumes."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>offline <input id="lk-off" type="range" min="0" max="70" value="50"><output for="lk-off">50</output>%</label>
+    </div>
+    <figcaption id="cap-leak"><b>Figure 7.</b> When more than a third is offline, the available chain keeps going and finality stalls. The inactivity leak then lowers the offline validators' finality weight, \(1 - (s/65536)^2\) for an inactivity score \(s\) that grows by 4 per round, until the online share reaches two thirds. Balances are never cut; a validator offline for 16,384 rounds (about 18 days) is exited. <span class="src"><i>spec</i> consensus-specs</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="fg"><span class="num">5</span>Layer 2: the finality gadget</h2>
+    <div class="here-row"><svg class="here" data-on="fg" viewBox="0 0 120 120" role="img" aria-label="You are here: the finality gadget"></svg>
+    <p>The bottom lane of Figure 1. Every validator signs one finality attestation per round of 8 slots. The gadget replaces Casper FFG and lives in the beacon state; it counts in <b>heights</b>, not epochs <span class="src"><i>spec</i> consensus-specs</span>.</p></div>
+
+    <h3>Heights, targets and timeouts</h3>
+    <p>At each height \(h\) the gadget has a <b>target</b>: the first block of that height. An attestation carries a <b>height vote</b>, either the target \((h, T)\) or a timeout, and optionally a <b>finality vote</b> for an earlier justified height. Each block applies three rules in order: finalize a pending justification that now has a quorum; else justify the target if two thirds voted for it, and move to height \(h+1\) at this very block; else, after 8 slots, move on without justifying if target votes plus timeouts reach two thirds. Figure 8 runs both paths.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-heights" aria-labelledby="cap-heights">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.2" role="img" aria-label="A chain of blocks with height markers. Attestations for target T at height h fill a quorum bar; at two thirds T is justified and height h+1 starts at the next block. Attestations at h+1 carry a finality vote for T; at two thirds T is finalized. A second case shows timeouts advancing the height without justification."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-heights"><b>Figure 8.</b> Two quorums make finality. Two thirds of target votes <span class="c-teal">justify</span> \(T\) and open the next height at once, mid-round if need be. Two thirds of later attestations carrying the finality vote \((h, T)\) <span class="c-blue">finalize</span> it. If the target stalls, <span class="c-orange">timeouts</span> let the height advance after 8 slots without justifying anything. <span class="src"><i>spec</i> consensus-specs</span> <span class="src"><i>workshop</i> Cambridge, Roberto</span></figcaption>
+  </figure>
+
+  <section>
+    <h3>Why two thirds: accountable safety</h3>
+    <p>Two quorums of two thirds overlap in at least a third of the validators. If two conflicting blocks were ever finalized, everyone in the overlap signed two conflicting messages, and those messages are slashable: two target votes at the same height for different roots, or a vote that contradicts a finality vote at its height. Figure 9 draws the overlap. Honest validators never sign such pairs; each keeps a signing record that never expires <span class="src"><i>spec</i> consensus-specs</span> <span class="src"><i>workshop</i> Cambridge, Roberto</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-overlap" aria-labelledby="cap-overlap">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 720 230" role="img" aria-label="Two bars of two thirds each over the same validator set overlap in at least one third: those validators signed conflicting votes and are slashable."></svg>
+    </div>
+    <figcaption id="cap-overlap"><b>Figure 9.</b> Accountable safety: \(\tfrac23 + \tfrac23 - 1 = \tfrac13\). Finalizing two conflicting blocks requires at least a third of all validators to sign slashable pairs. The Lean proof states it as at least \(2q - n\) faulty validators for quorum \(q\). <span class="src"><i>proof</i> Lean, simplified-dc-lean</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="interface"><span class="num">6</span>How the two layers talk</h2>
+    <p>The layers exchange very little, which is what makes them separable. The finality gadget hands the available chain a <b>frame</b>: the tree of accepted blocks above the finalized block, a fork-choice root, and which heads are viable. The available chain hands back two blocks once per round: <b>fg_confirmed</b>, its deepest fast-locked block, whose state gives the height vote, and its <b>head</b>, whose state gives the finality vote. If nothing is fast-locked, the validator does not attest (Figure 10) <span class="src"><i>spec</i> Goldilocks</span> <span class="src"><i>workshop</i> Cambridge, Francesco</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-interface" aria-labelledby="cap-interface">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 720 300" role="img" aria-label="Two boxes. The finality gadget holds the block tree, state, finalized and justified blocks and the attestation pool; it sends the frame (tree, fork-choice root, viable heads). The available chain holds Goldfish votes, locks and confirmations; it sends fg_confirmed and head once per round."></svg>
+    </div>
+    <figcaption id="cap-interface"><b>Figure 10.</b> The interface. Finality attestations never enter the fork choice: "if you can keep up with blocks and Goldfish votes, you never fall behind". And when finality stalls, no new fast lock means no new attestations, so traffic drops by itself: "a backoff with no backoff rule". <span class="src"><i>workshop</i> Cambridge, Francesco</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="timing"><span class="num">7</span>Committees and timing</h2>
+    <p>In the current spec a round is 8 slots. The active validators are split into 2,048 finality committees, 256 per slot, so each validator attests once per round in its committee's slot. Separately, each slot draws a head-vote committee of 1,024 seats, sampled by effective balance <span class="src"><i>spec</i> consensus-specs</span>. The sources disagree on that size: about 512 in the EIP <span class="src"><i>spec</i> EIP-8453 draft</span>, and 512 seats drawn by VRF with 60% thresholds in Mikhail's open questions <span class="src"><i>note</i> Mikhail</span>. Figure 11 lays out one round.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-round" aria-labelledby="cap-round">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 720 300" role="img" aria-label="One round of 8 slots of 12 seconds. Each slot is split into four phases of 3 seconds: propose, head vote, support cutoff, freeze; 256 finality committees attest in each slot; a head-vote committee of 1,024 seats votes in each slot."></svg>
+    </div>
+    <figcaption id="cap-round"><b>Figure 11.</b> One round in the current spec: 8 slots of 12 s, each split into \(4\Delta\) with \(\Delta = 3\) s. Every slot has a head-vote committee and 256 of the 2,048 finality committees. Confirmations for slot \(s\) update at \(6\Delta\), during the next slot. <span class="src"><i>spec</i> consensus-specs</span> <span class="src"><i>spec</i> Goldilocks</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="network"><span class="num">8</span>Moving a million votes</h2>
+    <p>The hard engineering problem is the finality gadget's traffic: every validator, every round, aggregated and on chain in time. A finality vote is 136 bytes of data, 248 bytes as a single gossip message; 100,000 votes need 12.5 kB of bitfield <span class="src"><i>repo</i> dc-networking</span>. The leading proposal pipelines committees: every \(\Delta\) seconds a new committee "unit" votes for 4 s, then aggregates for 4 s, so votes and aggregates flow continuously instead of in bursts <span class="src"><i>workshop</i> Cambridge, Yann</span>. Figure 12 is Yann's model.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-units" aria-labelledby="cap-units">
+    <div class="stage">
+      <canvas data-aspect="0.34" data-aspect-narrow="0.72" role="img" aria-label="Pipelined committee units over an 8-slot round: each unit votes for 4 seconds then aggregates for 4 seconds. A slider sets the unit spacing; readouts show committee size per subnet, bytes per unit, global topic load and post-quantum proving time."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>unit spacing Δ <input id="un-d" type="range" min="1" max="4" value="4"><output for="un-d">4</output> s</label>
+      <label>validators <input id="un-v" type="range" min="0" max="3" value="0"><output for="un-v">1.1M</output></label>
+    </div>
+    <figcaption id="cap-units"><b>Figure 12.</b> Pipelined units at 12 s slots and 8-slot rounds. At \(\Delta = 4\) s there are 23 units per round, 747 validators per subnet per unit (1.39× today's 537), about 110 kB per subnet per unit, 1.03 MB of aggregates per slot on the global topic, and a post-quantum proof per subnet in about 2.8 s, inside the 4 s window. Model formulas from the talk. <span class="src"><i>workshop</i> Cambridge, Yann</span></figcaption>
+  </figure>
+
+  <section>
+    <p>Simulations measure what the models assume. Splitting the finality votes into sub-rounds cut their p99 arrival time from about 12 s to under 2 s in a 4,000-node simulation; giving votes priority over data columns in Prysm's send queues cut vote queueing on a 5 Mbit/s uplink from 580–940 ms to about 90 ms (Figure 13). EIP-8334 bundles attestations, cutting a vote from 240 to 138 bytes <span class="src"><i>workshop</i> Cambridge, Sukun</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-sims" aria-labelledby="cap-sims">
+    <div class="stage">
+      <svg class="plot" viewBox="0 0 720 300" role="img" aria-label="Bar chart of p99 finality-vote arrival times in eth-slot-sim: no subrounds 11,984 ms, 10 subrounds 1,825 ms, 5 subrounds 2,788 ms, 5 subrounds batched 1,432 ms. Second chart: attestation p90 on a 5 Mbit/s uplink, baseline 5.60 s, votes-first 4.30 s."></svg>
+    </div>
+    <figcaption id="cap-sims"><b>Figure 13.</b> Two measurements. Left: p99 arrival of finality votes in eth-slot-sim (4,000 nodes, 400k validators); spreading votes over sub-rounds and batching them tames the tail. Right: attestation p90 on 5 Mbit/s uplinks in Prysm, before and after sending votes first. <span class="src"><i>repo</i> dc-networking</span> <span class="src"><i>workshop</i> Cambridge, Csaba</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="rewards"><span class="num">9</span>Rewards and the inactivity leak</h2>
+    <p>The current spec pays rewards only, no penalties: a validator who misses a duty forfeits that reward. Anders' sketch splits a budget of 64 between three votes, with 10 going to proposers who include them. Rewards decay with inclusion delay, so votes must land fast, and the weights keep griefing factors (what an attacker costs others per unit of its own loss) at 2 or below (Figure 14) <span class="src"><i>workshop</i> Cambridge, Anders</span> <span class="src"><i>note</i> Anders, DC rewards</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-rewards" aria-labelledby="cap-rewards">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.0" role="img" aria-label="Reward weights summing to 64: available-chain head vote 6 plus 4 for the proposer, height vote 24 plus 3, finalization vote 24 plus 3. Curves show how much of each reward remains as inclusion is delayed by slots."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>inclusion delay <input id="rw-d" type="range" min="1" max="24" value="1"><output for="rw-d">1</output> slots</label>
+    </div>
+    <figcaption id="cap-rewards"><b>Figure 14.</b> Reward weights out of 64, and what is left after a delay. A head vote pays only if included in the next slot. Height and finality votes lose an eighth of what remains in the first late slot and a twenty-fourth per slot after; proposers lose half per slot. <span class="src"><i>workshop</i> Cambridge, Anders</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="speed"><span class="num">10</span>How fast is finality?</h2>
+    <p>Yann's finality.watch turns all this into one number. It assumes today's coupled round takes 384 s for 1.1 million validator identities, divides by the gains of each improvement, rounds to whole slots, and adds the expected waits <span class="src"><i>tool</i> finality.watch</span>. It is a simplified model, not a forecast. Figure 15 reproduces it, with the waiting times stakeholders asked for in the background <span class="src"><i>report</i> Finality Stakeholder Research</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-speed" aria-labelledby="cap-speed">
+    <div class="stage">
+      <canvas data-aspect="0.34" data-aspect-narrow="0.8" role="img" aria-label="A time-to-finality bar computed from the number of validator identities, slot time and rounds, with decoupling and other improvements as toggles, drawn over stakeholder bands from 1 second to 5 minutes."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>identities <input id="sp-v" type="range" min="0" max="5" value="0"><output for="sp-v">1.1M</output></label>
+      <label>slot <input id="sp-s" type="range" min="4" max="12" value="12"><output for="sp-s">12</output> s</label>
+      <label>rounds <input id="sp-r" type="range" min="1" max="2" value="2"><output for="sp-r">2</output></label>
+      <button class="btn" type="button" id="sp-dc" aria-pressed="true">Decoupled</button>
+      <button class="btn" type="button" id="sp-more" aria-pressed="false">+ bundling and batching</button>
+    </div>
+    <figcaption id="cap-speed"><b>Figure 15.</b> The finality.watch model. Today, 1.1M identities and coupled rounds give 966 s. Decoupling alone gives 246 s; adding EIP-8334 bundling and EIP-8243 batching gives 66 s; consolidation to 128k identities gives 36 s. Stakeholders put the sweet spot at 10–30 s and want at least under a minute. <span class="src"><i>tool</i> finality.watch</span> <span class="src"><i>report</i> stakeholder research</span></figcaption>
+  </figure>
+
+  <section>
+    <p>The same model breaks one transaction's wait into stages. In the "DC today" setting at 1.1 million validators, Yann's introduction shows inclusion after 6 s, confirmation 12 s later, 54 s waiting for the next round, justification 72 s after that and finalization 84 s later: 228 s in all, against about 16 minutes today (Figure 16) <span class="src"><i>workshop</i> Cambridge, Yann</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-journey" aria-labelledby="cap-journey">
+    <div class="stage">
+      <canvas data-aspect="0.26" data-aspect-narrow="0.75" role="img" aria-label="A timeline of one transaction under decoupled consensus: included at 6 s, confirmed at 18 s, waits until 72 s for its round, justified at 144 s, finalized at 228 s; below, today's Gasper at about 16 minutes on the same scale."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-journey"><b>Figure 16.</b> One transaction's journey: 3 min 48 s to finality under decoupled consensus as presented in Cambridge, against about 16 min today, on one time axis. The confirmed tip arrives within the first 20 s. <span class="src"><i>workshop</i> Cambridge, Yann</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="oneround"><span class="num">11</span>One-round finality</h2>
+    <p>Finality takes two rounds because the first locks and the second commits. A protocol can finalize in one round if it asks for more votes, at the cost of tolerating fewer faults. With \(t\) Byzantine and \(p\) offline validators as fractions of \(n\), one-round finality is safe and live when \(2t + 3p < n\) <span class="src"><i>workshop</i> Cambridge, Yann</span> <span class="src"><i>post</i> Yann, One-Round Finality</span>. Figure 17 lets you pick the threshold.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-1rf" aria-labelledby="cap-1rf">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.1" role="img" aria-label="The line 2t + 3p = 1 in a plane of Byzantine fraction t against offline fraction p. A slider sets the finalization threshold; the point shows how many Byzantine and offline validators it tolerates. FFG's one third is marked for comparison."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>finalize at <input id="rf-q" type="range" min="67" max="99" value="80"><output for="rf-q">80</output>% of votes</label>
+    </div>
+    <figcaption id="cap-1rf"><b>Figure 17.</b> The one-round trade-off. Finalizing at 80% of votes tolerates 20% Byzantine and 20% offline; at 70%, 5% and 30%; at 90%, 35% and 10%. Stakeholders worry that a single large staker could reach 17–20%, so support is weak. A newer "safety gadget" lets cautious users wait one more round for full safety. <span class="src"><i>workshop</i> Cambridge, Yann</span> <span class="src"><i>report</i> stakeholder research</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="pq"><span class="num">12</span>Ready for post-quantum signatures</h2>
+    <p>BLS signatures aggregate for free and are not quantum safe. Post-quantum signatures are about 3 KB each and must be aggregated with SNARKs. Decoupling helps twice. The head-vote committee is small enough that its post-quantum signatures can be concatenated without aggregation, so the available chain can switch first. And the finality gadget, off the critical path, gets whole seconds to build aggregation proofs <span class="src"><i>post</i> Luca</span> <span class="src"><i>workshop</i> Cambridge, Kamil</span>. Figure 18 runs Kamil's aggregation-time model.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-pqagg" aria-labelledby="cap-pqagg">
+    <div class="stage">
+      <canvas data-aspect="0.48" data-aspect-narrow="1.2" role="img" aria-label="A two-layer aggregation tree: validators' signatures go to subnet aggregators, whose SNARK proofs are merged into one. Bars show download and compute time per layer for the chosen number of validators and subnets."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>validators <input id="pq-v" type="range" min="13" max="20" value="13"><output for="pq-v">8,192</output></label>
+      <label>subnets <input id="pq-s" type="range" min="3" max="8" value="3"><output for="pq-s">8</output></label>
+    </div>
+    <figcaption id="cap-pqagg"><b>Figure 18.</b> Post-quantum aggregation in two layers: 3,072-byte signatures at 1,000 per second, 128 KB proofs at 10 per second, 50 Mbit/s links. The default, 8,192 validators over 8 subnets, takes 2.5 s; compute dominates download. Deeper trees help at larger sizes. <span class="src"><i>tool</i> PQ aggregation model</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="status"><span class="num">13</span>Status and open questions</h2>
+    <p>The design converged at the Cambridge workshop of 13–15 October 2026 and is a headliner candidate for the I* fork <span class="src"><i>blog</i> Upgrading Finality 1</span>. Where things stand:</p>
+    <ul class="remember">
+      <li><b>EIP-8453</b> is a draft pull request; its stated goals are a foundation for post-quantum signatures, stronger fork choice, and at least four times faster finality <span class="src"><i>spec</i> EIP-8453 draft</span>.</li>
+      <li><b>Spec</b>: the finality gadget, committees, rewards and inactivity are in consensus-specs under <code>_features/eip8453</code>; fork choice and networking are still TODO <span class="src"><i>spec</i> consensus-specs</span>.</li>
+      <li><b>Proofs</b>: two Lean 4 developments prove accountable safety, finality liveness after synchrony returns, and confirmation properties of the available chain, under a one-third adversary <span class="src"><i>proof</i> Lean</span>.</li>
+      <li><b>Code</b>: a Prysm branch implements Goldilocks fork choice and the finality gadget on a devnet; benchmarks run on Shadow and on 1,000-node devnets <span class="src"><i>code</i> Prysm</span> <span class="src"><i>repo</i> dc-networking</span>.</li>
+    </ul>
+    <p>Figure 19 lays out the road ahead and the open issues listed on the workshop's flipchart.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-road" aria-labelledby="cap-road">
+    <div class="stage scrollx">
+      <svg class="plot" viewBox="0 0 900 380" role="img" aria-label="Roadmap: decoupled consensus in I*, post-quantum heartbeat in J*, leanXMSS attestations in K*, one-round finality in L*. Below, the workshop's ten open issues."></svg>
+    </div>
+    <figcaption id="cap-road"><b>Figure 19.</b> The road ahead as shown in Cambridge, and the open issues on the workshop flipchart: lock length and thresholds, whether 4× holds, the committee size and VRF selection, penalties, reviews, networking priorities, and the transition. <span class="src"><i>workshop</i> Cambridge, Yann</span> <span class="src"><i>workshop</i> flipchart</span></figcaption>
+  </figure>
+
+  <section>
+    <h2 id="remember"><span class="num">14</span>What to remember</h2>
+    <ul class="remember">
+      <li>One vote used to do two jobs; decoupled consensus splits it into a head vote by a small committee every slot and a finality vote by everyone once per round.</li>
+      <li>The available chain (Goldilocks) forgets votes after one slot, which kills ex-ante reorgs, and adds expiring locks for fast confirmation. It stays live when validators sleep.</li>
+      <li>The finality gadget counts heights, justifies at two thirds and finalizes with a second two-thirds quorum, and is accountably safe: conflicting finality costs a third of all stake.</li>
+      <li>The two exchange only a frame and two blocks per round, so finality traffic never slows the fork choice.</li>
+      <li>Finality drops from about 16 minutes to under 4 at today's size; consolidation, bundling, one-round finality and post-quantum aggregation decide how far below a minute it can go.</li>
+    </ul>
+  </section>
+
+  <footer class="refs">
+    <p><b>Further reading</b> (collected in Ben Edgington's <a href="https://hackmd.io/@benjaminion/decoupled-consensus-links">EIP-8453 links page</a>)</p>
+    <ol>
+      <li><a href="https://github.com/ethereum/EIPs/pull/12566">EIP-8453 draft pull request</a> and the <a href="https://github.com/ethereum/consensus-specs/tree/decoupled-consensus/specs/_features">consensus-specs decoupled-consensus branch</a> (<code>_features/eip8453</code>).</li>
+      <li>Francesco D'Amato, <a href="https://ethresear.ch/t/unblocking-faster-finality-with-decoupled-consensus/24527">Unblocking faster finality with decoupled consensus</a> (2026). The design rationale, Goldfish and the coupling dilemma.</li>
+      <li>Luca Zanolini, <a href="https://ethresear.ch/t/why-ethereum-needs-a-dynamically-available-protocol/24418">Why Ethereum Needs a Dynamically Available Protocol</a> (2026). The availability–finality dilemma.</li>
+      <li>Yann Vonlanthen, <a href="https://notes.ethereum.org/@yannvon/S1wIxIDqbe">All You Need to Know About One-Round Finality</a> (2026).</li>
+      <li>Ben Edgington, <a href="https://consensus.ethereum.foundation/blog/upgrading-finality-edition-1">Upgrading Finality 1</a>, <a href="https://consensus.ethereum.foundation/blog/upgrading-finality-edition-2">Upgrading Finality 2</a> and the <a href="https://consensus.ethereum.foundation/articles/stakeholder-research">Finality Stakeholder Research</a> report.</li>
+      <li>Vitalik Buterin, <a href="https://notes.ethereum.org/@vbuterin/single_slot_finality">Paths Towards Single Slot Finality</a> (2022).</li>
+      <li>Cambridge workshop presentations, 13–15 October 2026: introduction, Goldilocks, rewards, networking, simulations, specifications, PQ networking, gossip priorities, really fast finality, one-round finality (all linked from the links page).</li>
+      <li><a href="https://github.com/ethereum/dc-networking">ethereum/dc-networking</a>, Anders Elowsson's <a href="https://notes.ethereum.org/@anderselowsson/DC_rewards_noSG">rewards sketch</a>, Mikhail Kalinin's <a href="https://hackmd.io/@n0ble/S1xc11lhfe">open questions</a>.</li>
+      <li>Lean proofs: <a href="https://github.com/fradamt/simplified-dc-lean">fradamt/simplified-dc-lean</a> and <a href="https://github.com/saltiniroberto/decoupled-consensus-lean">saltiniroberto/decoupled-consensus-lean</a>. Prototype: the <a href="https://github.com/OffchainLabs/prysm/compare/decoupled-consensus">Prysm decoupled-consensus branch</a>.</li>
+      <li>Tools: <a href="https://finality.watch">finality.watch</a> and the <a href="https://kamilsa.github.io/pq-sig-agg-model/">PQ signature aggregation model</a>.</li>
+    </ol>
+  </footer>
+</main>
+
+<script>
+/* ================= figure runtime (keep; extend per page) ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const tok = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Every figure registers a redraw so a theme switch repaints canvases with the new tokens.
+const redrawers = new Set();
+const redrawAll = () => redrawers.forEach(f => f());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Hi-DPI canvas that tracks its CSS width; height = width * data-aspect
+// (data-aspect-narrow below 560px, so a figure stays large on a phone).
+function canvasFig(canvas, draw) {
+  const ctx = canvas.getContext('2d');
+  const state = { ctx, w: 0, h: 0 };
+  const paint = () => { ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, state.w, state.h); draw(state); };
+  const resize = () => {
+    const w = canvas.clientWidth; if (!w) return;
+    const aspect = parseFloat((w < 560 && canvas.dataset.aspectNarrow) || canvas.dataset.aspect || '0.6');
+    const h = Math.round(w * aspect);
+    canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * devicePixelRatio); canvas.height = Math.round(h * devicePixelRatio);
+    state.w = w; state.h = h; paint();
+  };
+  new ResizeObserver(resize).observe(canvas);
+  redrawers.add(paint);
+  resize();
+  return paint;
+}
+
+// rAF loop that runs only while its figure is on screen and playing.
+function loop(el, tick) {
+  let on = false, visible = false, last = 0, id = 0;
+  const frame = t => { const dt = Math.min(0.05, (t - last) / 1000 || 0); last = t; if (tick(dt) === false) api.stop(); else id = requestAnimationFrame(frame); };
+  const sync = () => { cancelAnimationFrame(id); if (on && visible) { last = performance.now(); id = requestAnimationFrame(frame); } };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; sync(); }).observe(el);
+  const api = { start() { on = true; sync(); }, stop() { on = false; sync(); el.dispatchEvent(new Event('loopstop')); }, get running() { return on; } };
+  return api;
+}
+
+// Step-through controller: Reset / ← / Play / → buttons, plus keyboard ←/→ when the figure has focus.
+function stepper(fig, { count, render, interval = 900 }) {
+  let i = 0, timer = 0;
+  const btn = a => $(`[data-act="${a}"]`, fig);
+  const play = btn('play');
+  const show = () => {
+    const n = count();
+    i = Math.max(0, Math.min(i, n));
+    render(i, n);
+    btn('prev').disabled = i === 0; btn('next').disabled = i === n;
+  };
+  const stop = () => { clearInterval(timer); timer = 0; play.setAttribute('aria-pressed', 'false'); play.textContent = 'Play'; };
+  const go = d => { i += d; show(); };
+  btn('prev').onclick = () => { stop(); go(-1); };
+  btn('next').onclick = () => { stop(); go(1); };
+  btn('reset').onclick = () => { stop(); i = 0; show(); };
+  play.onclick = () => {
+    if (timer) return stop();
+    if (i >= count()) i = 0;
+    play.setAttribute('aria-pressed', 'true'); play.textContent = 'Pause';
+    if (reducedMotion.matches) { i = count(); show(); return stop(); }
+    show();
+    timer = setInterval(() => { if (i >= count()) return stop(); go(1); }, interval);
+  };
+  fig.addEventListener('keydown', e => {
+    if (e.target.matches('input')) return;
+    if (e.key === 'ArrowRight') { stop(); go(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { stop(); go(-1); e.preventDefault(); }
+  });
+  return { show, reset() { stop(); i = 0; show(); }, get i() { return i; } };
+}
+
+// Range input bound to its <output>.
+function range(input, onInput, fmt = v => v) {
+  const out = input.parentElement.querySelector('output');
+  const upd = () => { if (out) out.textContent = fmt(+input.value); onInput(+input.value); };
+  input.addEventListener('input', upd);
+  upd();
+}
+
+// Draggable SVG element in viewBox coordinates; also arrow-key movable.
+function draggable(svg, el, onMove, step = 10) {
+  const toSvg = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing'; e.preventDefault(); });
+  el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) { const p = toSvg(e); onMove(p.x, p.y); } });
+  el.addEventListener('pointerup', () => { el.style.cursor = 'grab'; });
+  el.addEventListener('keydown', e => {
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (d) { e.preventDefault(); onMove(+el.getAttribute('cx') + d[0], +el.getAttribute('cy') + d[1]); }
+  });
+}
+
+const typeset = el => window.MathJax?.typesetPromise ? MathJax.typesetPromise([el]) : Promise.resolve();
+
+/* ================= Scene: a small Manim-style animation engine =================
+   A scene is a list of objects plus a timeline of property tweens grouped into "beats".
+   The frame at time t is a pure function of t, so the timeline can be scrubbed, replayed,
+   stepped beat by beat and rebuilt when a parameter changes.
+
+     const sc = new Scene('#fig-x', { x: [-1, 10], y: [-1, 6], equal: true }, (sc, P) => {
+       const a = sc.add(Dot({ x: 1, y: 1, color: 'blue', opacity: 0, tag: 'a' }));
+       const l = sc.add(Line({ x1: 1, y1: 1, x2: 5, y2: 3, color: 'yellow', draw: 0 }));
+       sc.play('Place the point a.', [fadeIn(a)]);
+       sc.play('Draw the segment from a.', [create(l)], 1.2);
+       sc.play('Slide a along it.', [to(a, { x: 5, y: 3 })]);
+     });
+
+   World coordinates have y pointing up. Sizes r and width are in CSS pixels; R (circle) is in
+   world units. Colours are token names ('blue', 'muted', 'fg') or literal CSS colours.
+
+   Phones: options may be a function of `narrow` (canvas under 560px), and build() can read
+   sc.narrow to stack the layout vertically. Crossing the breakpoint rebuilds the scene. */
+
+const ease = {
+  smooth: t => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2,
+  linear: t => t,
+  out: t => 1 - (1 - t) ** 3,
+  there: t => Math.sin(Math.PI * t),           // 0 → 1 → 0, for indicate()
+};
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+const colorCache = new Map();
+function rgb(c) {
+  const css = /^(#|rgb|hsl)/.test(c) ? c : tok(c);
+  if (colorCache.has(css)) return colorCache.get(css);
+  const cv = document.createElement('canvas').getContext('2d');
+  cv.fillStyle = '#000'; cv.fillStyle = css;
+  const s = cv.fillStyle;   // normalised to #rrggbb or rgba(...)
+  const v = s[0] === '#' ? [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+  colorCache.set(css, v); return v;
+}
+redrawers.add(() => colorCache.clear());
+const isColor = v => typeof v === 'string' && v !== '' && !/^\d/.test(v);
+function mix(a, b, p) {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * p;
+  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) return a.map((x, i) => mix(x, b[i], p));
+  if (isColor(a) && isColor(b) && a !== b) {
+    if (p <= 0) return a; if (p >= 1) return b;
+    const [x, y] = [rgb(a), rgb(b)];
+    return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * p)).join(',')})`;
+  }
+  return p < 1 ? a : b;   // strings, booleans: switch at the end
+}
+const paintColor = c => (/^(#|rgb|hsl)/.test(c) ? c : tok(c));
+
+class Scene {
+  static all = new Map();
+  constructor(fig, opts, build) {
+    this.fig = typeof fig === 'string' ? $(fig) : fig;
+    this.canvas = $('canvas', this.fig);
+    this.optsIn = opts; this.narrow = this.canvas.clientWidth < 560; this.#layout();
+    this.build = build; this.params = {};
+    this.t = 0; this.playing = false; this.focus = null;
+    this.ctx = this.canvas.getContext('2d');
+    Scene.all.set(this.fig.id, this);
+    if (this.optsIn.controls === false || (typeof opts === 'function' && opts(false).controls === false)) this.#bareControls(); else this.#controls();
+    this.#measure();
+    this.rebuild();
+    new ResizeObserver(() => this.#resize()).observe(this.canvas);
+    new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; if (!this.visible) this.pause(); }).observe(this.fig);
+    redrawers.add(() => this.render());
+    this.#resize();
+  }
+
+  #layout() { this.opts = { x: [0, 10], y: [0, 6], equal: false, pad: 24, rest: 'end', ...(typeof this.optsIn === 'function' ? this.optsIn(this.narrow) : this.optsIn) }; }
+
+  /* ---- building ---- */
+  // New params restart at the resting frame; a plain rebuild (resize, fonts ready) keeps the current time.
+  rebuild(params) {
+    const keep = !params && this.objs;
+    Object.assign(this.params, params);
+    this.objs = []; this.tracks = []; this.beats = []; this.T = 0;
+    this.build(this, this.params);
+    if (!this.beats.length) this.beats.push({ label: '', t0: 0, t1: 0 });
+    this.scrub.max = Math.max(1, Math.round(this.T * 100));
+    this.seek(keep ? this.t : this.opts.rest === 'end' ? this.T : this.opts.rest);
+  }
+  // Rebuild with new params and play the whole (short) timeline: lets an instrument animate a change.
+  animateTo(params) { this.rebuild(params); this.stopAt = this.T; this.playFrom(0); }
+  add(o) { o.opacity ??= 1; o.init = { ...o }; this.objs.push(o); return o; }
+  addAll(list) { return list.map(o => this.add(o)); }
+  play(label, anims, dur = 1, e = ease.smooth) {
+    const t0 = this.T;
+    anims.flat(Infinity).forEach(a => a(this, t0, dur, e));
+    this.beats.push({ label, t0, t1: t0 + dur });
+    this.T += dur;
+  }
+  wait(dur = .6) { this.T += dur; if (this.beats.length) this.beats.at(-1).t1 = this.T; }
+  valueAt(o, prop, t) {
+    let v = o.init[prop];
+    for (const k of this.tracks) if (k.o === o && k.prop === prop && t >= k.t0) v = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return v;
+  }
+  track(o, prop, t0, t1, value) { this.tracks.push({ o, prop, t0, t1, value }); }
+
+  /* ---- coordinates ---- */
+  #resize() {
+    const w = this.canvas.clientWidth; if (!w || w === this.w) return;
+    this.#measure();
+    this.rebuild();      // layouts may depend on sc.narrow and on pixel sizes (texRow), so rebuild at the new size
+  }
+  #measure() {
+    const c = this.canvas, w = c.clientWidth || c.parentElement.clientWidth || 640;
+    if ((w < 560) !== this.narrow) { this.narrow = w < 560; this.#layout(); }
+    const h = Math.round(w * parseFloat((w < 560 && c.dataset.aspectNarrow) || c.dataset.aspect || '0.6'));
+    c.style.height = h + 'px'; c.width = Math.round(w * devicePixelRatio); c.height = Math.round(h * devicePixelRatio);
+    this.w = w; this.h = h;
+    const { x: [x0, x1], y: [y0, y1], pad } = this.opts;
+    let sx = (w - 2 * pad) / (x1 - x0), sy = (h - 2 * pad) / (y1 - y0);
+    if (this.opts.equal) sx = sy = Math.min(sx, sy);
+    this.sx = sx; this.sy = sy;
+    this.ox = (w - sx * (x1 - x0)) / 2 - sx * x0;
+    this.oy = (h + sy * (y1 - y0)) / 2 + sy * y0;
+  }
+  X(x) { return this.ox + this.sx * x; }
+  Y(y) { return this.oy - this.sy * y; }
+
+  /* ---- time ---- */
+  stateAt(t) {
+    const s = new Map(this.objs.map(o => [o, { ...o.init }]));
+    for (const k of this.tracks) if (t >= k.t0) s.get(k.o)[k.prop] = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return s;
+  }
+  beatAt(t) { let i = 0; this.beats.forEach((b, k) => { if (t >= b.t0 - 1e-9) i = k; }); return i; }
+  seek(t) {
+    this.t = Math.max(0, Math.min(this.T, t));
+    this.scrub.value = Math.round(this.t * 100);
+    const i = this.beatAt(this.t);
+    if (this.label.textContent !== this.beats[i].label) this.label.textContent = this.beats[i].label;
+    this.render();
+  }
+  render() {
+    if (!this.w) return;
+    const { ctx } = this;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const s = this.cur = this.stateAt(this.t);    // S.cur.get(obj) lets one object's paint read another's state
+    for (const o of this.objs) {
+      const p = s.get(o);
+      let alpha = p.opacity;
+      if (this.focus && !(p.tag && p.tag.split(' ').includes(this.focus))) alpha *= .22;
+      if (alpha <= 0.002 || p.draw === 0) continue;
+      ctx.save(); ctx.globalAlpha = alpha;
+      if (p.glow > 0) { ctx.shadowColor = paintColor(p.color || 'fg'); ctx.shadowBlur = 18 * p.glow; }
+      o.paint(ctx, p, this);
+      ctx.restore();
+    }
+    this.onFrame?.(s, this.t);
+  }
+  playFrom(t) {
+    if (reducedMotion.matches) { this.next(); return; }
+    this.seek(t); this.playing = true; this.playBtn.setAttribute('aria-pressed', 'true'); this.playBtn.textContent = 'Pause';
+    let last = performance.now();
+    const frame = now => {
+      if (!this.playing) return;
+      const t = this.t + (now - last) / 1000; last = now;
+      if (t >= this.stopAt) { this.seek(this.stopAt); return this.pause(); }
+      this.seek(t); requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+  pause() { this.playing = false; this.playBtn.setAttribute('aria-pressed', 'false'); this.playBtn.textContent = 'Play'; }
+  next() { const i = this.beatAt(this.t), b = this.beats[i]; const target = this.t < b.t1 - 1e-6 ? b.t1 : (this.beats[i + 1]?.t1 ?? this.T);
+           if (reducedMotion.matches) return this.seek(target); this.stopAt = target; this.playFrom(this.t < b.t1 - 1e-6 ? this.t : (this.beats[i + 1]?.t0 ?? this.T)); }
+  prev() { this.pause(); const i = this.beatAt(this.t), b = this.beats[i]; this.seek(this.t > b.t0 + .05 || i === 0 ? b.t0 : this.beats[i - 1].t0); }
+  setFocus(tag) { this.focus = tag; this.render(); }
+
+  // Instruments without a timeline: no buttons, the scene simply rests on its (single) frame.
+  #bareControls() {
+    this.playBtn = document.createElement('button'); this.scrub = document.createElement('input'); this.label = document.createElement('div');
+  }
+  // CSS-pixel offset inside the canvas → world coordinates.
+  toWorld(px, py) { return [(px - this.ox) / this.sx, (this.oy - py) / this.sy]; }
+  // Pointer helper for instruments: cb(x, y, type) in world coordinates, type 'down' | 'move' | 'up'.
+  onPointer(cb) {
+    const c = this.canvas; let down = false;
+    const at = e => { const r = c.getBoundingClientRect(); return this.toWorld(e.clientX - r.left, e.clientY - r.top); };
+    c.addEventListener('pointerdown', e => { down = true; c.setPointerCapture(e.pointerId); cb(...at(e), 'down'); });
+    c.addEventListener('pointermove', e => cb(...at(e), down ? 'drag' : 'move'));
+    c.addEventListener('pointerup', e => { down = false; cb(...at(e), 'up'); });
+  }
+
+  #controls() {
+    const bar = $('.controls', this.fig) || this.fig.insertBefore(Object.assign(document.createElement('div'), { className: 'controls' }), $('figcaption', this.fig));
+    bar.insertAdjacentHTML('afterbegin',
+      `<button class="btn" type="button" data-sc="replay" aria-label="Replay from the start">↺</button>
+       <button class="btn" type="button" data-sc="prev" aria-label="Previous beat">←</button>
+       <button class="btn" type="button" data-sc="play" aria-pressed="false">Play</button>
+       <button class="btn" type="button" data-sc="next" aria-label="Next beat">→</button>
+       <input class="scrub" type="range" min="0" max="100" value="0" aria-label="Timeline">`);
+    bar.insertAdjacentHTML('beforeend', '<div class="step-label" aria-live="polite"></div>');
+    const b = a => $(`[data-sc="${a}"]`, bar);
+    this.playBtn = b('play'); this.scrub = $('.scrub', bar); this.label = $('.step-label', bar);
+    b('replay').onclick = () => { this.stopAt = this.T; this.playFrom(0); };
+    this.playBtn.onclick = () => { if (this.playing) return this.pause(); this.stopAt = this.T; this.playFrom(this.t >= this.T - 1e-6 ? 0 : this.t); };
+    b('next').onclick = () => { this.pause(); this.next(); };
+    b('prev').onclick = () => this.prev();
+    this.scrub.oninput = () => { this.pause(); this.seek(this.scrub.value / 100); };
+    this.fig.tabIndex = -1;
+    this.fig.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select')) return;
+      if (e.key === 'ArrowRight') { this.pause(); this.next(); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { this.prev(); e.preventDefault(); }
+    });
+  }
+}
+
+/* ---- animations: each returns (scene, t0, dur, ease) => void ---- */
+const many = (o, f) => (Array.isArray(o) ? o : [o]).map(f);
+function to(o, props, from = {}) {
+  return many(o, oo => (sc, t0, dur, e) => {
+    for (const [k, v] of Object.entries(props)) {
+      const a = k in from ? from[k] : sc.valueAt(oo, k, t0);
+      const b = typeof v === 'function' ? v(a) : v;
+      sc.track(oo, k, t0, t0 + dur, p => mix(a, b, e(p)));
+    }
+  });
+}
+const fadeIn = o => to(o, { opacity: 1 });
+const fadeOut = o => to(o, { opacity: 0 });
+const create = o => many(o, oo => [to(oo, { opacity: 1 }, { opacity: 1 }), to(oo, { draw: 1 }, { draw: 0 })]);
+const uncreate = o => to(o, { draw: 0 });
+const indicate = o => many(o, oo => (sc, t0, dur) => sc.track(oo, 'glow', t0, t0 + dur, p => ease.there(p)));
+const set = (o, props) => many(o, oo => (sc, t0) => { for (const [k, v] of Object.entries(props)) sc.track(oo, k, t0, t0, () => v); });
+// Stagger: run anims one after another inside the beat, with overlap lag (0 = sequential, 1 = together).
+const lagged = (anims, lag = .25) => (sc, t0, dur, e) => {
+  const n = anims.length, d = dur / (1 + (n - 1) * lag);
+  anims.forEach((a, i) => [a].flat(Infinity).forEach(f => f(sc, t0 + i * lag * d, d, e)));
+};
+
+/* ---- objects: plain props + paint(ctx, state, scene) ---- */
+function partialPath(ctx, pts, frac) {
+  if (pts.length < 2) return;
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); L += l; }
+  let left = L * clamp01(frac);
+  ctx.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const f = Math.min(1, left / (segs[i - 1] || 1));
+    ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f);
+    left -= segs[i - 1];
+  }
+}
+function arrowHead(ctx, x1, y1, x2, y2, size) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - size * Math.cos(a - .42), y2 - size * Math.sin(a - .42));
+  ctx.lineTo(x2 - size * Math.cos(a + .42), y2 - size * Math.sin(a + .42));
+  ctx.closePath(); ctx.fill();
+}
+const stroke = (ctx, p) => { ctx.strokeStyle = paintColor(p.color); ctx.lineWidth = p.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; if (p.dash) ctx.setLineDash(p.dash); };
+
+const Dot = p => ({ r: 6, color: 'fg', ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.beginPath(); ctx.arc(S.X(s.x), S.Y(s.y), s.r * (1 + .35 * (s.glow || 0)), 0, 2 * Math.PI); ctx.fill();
+} });
+const Line = p => ({ color: 'fg', width: 2.5, draw: 1, arrow: false, ...p, paint(ctx, s, S) {
+  const [x1, y1, x2, y2] = [S.X(s.x1), S.Y(s.y1), S.X(s.x2), S.Y(s.y2)];
+  const ex = x1 + (x2 - x1) * s.draw, ey = y1 + (y2 - y1) * s.draw;
+  stroke(ctx, s); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  if (s.arrow && s.draw > .05) { ctx.setLineDash([]); ctx.fillStyle = paintColor(s.color); arrowHead(ctx, x1, y1, ex, ey, 8 + s.width * 2); }
+} });
+const Arrow = p => Line({ arrow: true, ...p });
+const Circle = p => ({ color: 'fg', width: 2, R: 1, draw: 1, start: Math.PI / 2, ccw: true, fill: null, ...p, paint(ctx, s, S) {
+  // start is a maths angle (counter-clockwise from +x); create() sweeps counter-clockwise unless ccw: false
+  const turn = 2 * Math.PI * s.draw * (s.ccw ? 1 : -1);
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.start, -s.start - turn, s.ccw);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+const Arc = p => ({ color: 'fg', width: 3, R: 1, a0: 0, a1: Math.PI, draw: 1, ...p, paint(ctx, s, S) {
+  const a1 = s.a0 + (s.a1 - s.a0) * s.draw;
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.a0, -a1, a1 > s.a0);
+  stroke(ctx, s); ctx.stroke();
+} });
+const Path = p => ({ color: 'fg', width: 2.5, draw: 1, closed: false, fill: null, ...p, paint(ctx, s, S) {
+  const pts = s.pts.map(([x, y]) => [S.X(x), S.Y(y)]);
+  if (s.closed) pts.push(pts[0]);
+  ctx.beginPath(); partialPath(ctx, pts, s.draw);
+  if (s.fill && s.draw >= 1) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+// A function graph. To morph into another function, give fn2 and tween m: to(g, { m: 1 }).
+const Graph = p => ({ color: 'blue', width: 3, draw: 1, x0: 0, x1: 1, n: 240, m: 0, fn2: null, ...p, paint(ctx, s, S) {
+  const f = s.fn2 && s.m > 0 ? x => s.fn(x) * (1 - s.m) + s.fn2(x) * s.m : s.fn;
+  const pts = []; for (let i = 0; i <= s.n; i++) { const x = s.x0 + (s.x1 - s.x0) * i / s.n; pts.push([S.X(x), S.Y(f(x))]); }
+  ctx.beginPath(); partialPath(ctx, pts, s.draw); stroke(ctx, s); ctx.stroke();
+} });
+const Rect = p => ({ color: 'fg', width: 1.5, fill: null, radius: 4, ...p, paint(ctx, s, S) {
+  const x = S.X(s.x), y = S.Y(s.y + s.h), w = s.w * S.sx, h = s.h * S.sy;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, s.radius);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  if (s.width) { stroke(ctx, s); ctx.stroke(); }
+} });
+// Text: either a fixed string, or fmt(value) so a number can count up with to(t, { value }).
+const Text = p => ({ color: 'fg', size: 15, font: 'sans', weight: 500, align: 'center', base: 'middle', dx: 0, dy: 0, ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.textAlign = s.align; ctx.textBaseline = s.base;
+  ctx.font = `${s.weight} ${s.size}px ${tok(s.font)}`;
+  ctx.fillText(s.fmt ? s.fmt(s.value) : s.text, S.X(s.x) + s.dx, S.Y(s.y) + s.dy);
+} });
+// TeX rendered by MathJax into an image, drawn on the canvas (cached per tex+colour+size).
+const texCache = new Map();
+const Tex = p => ({ color: 'fg', size: 18, align: 'center', ...p, paint(ctx, s, S) {
+  if (!window.MathJax?.tex2svg) return;
+  const colour = paintColor(s.color), key = s.tex + '|' + colour + '|' + s.size;
+  let img = texCache.get(key);
+  if (!img) {
+    const svg = MathJax.tex2svg(s.tex, { display: false }).querySelector('svg');
+    const ex = s.size * 0.45, w = parseFloat(svg.getAttribute('width')) * ex, h = parseFloat(svg.getAttribute('height')) * ex;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    const src = svg.outerHTML.replace(/currentColor/g, colour);
+    img = new Image(); img.w = w; img.h = h; img.onload = redrawAll;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+    texCache.set(key, img);
+  }
+  if (!img.complete) return;
+  const x = S.X(s.x) - (s.align === 'center' ? img.w / 2 : s.align === 'right' ? img.w : 0);
+  ctx.drawImage(img, x, S.Y(s.y) - img.h / 2, img.w, img.h);
+} });
+// Width in CSS px of a TeX string at a size (exact once MathJax is ready, estimated before).
+function texWidth(tex, size = 18) {
+  if (!window.MathJax?.tex2svg) return tex.replace(/\\[a-z]+|[{}]/g, 'x').length * size * .5;
+  return parseFloat(MathJax.tex2svg(tex, { display: false }).querySelector('svg').getAttribute('width')) * size * .45;
+}
+// Lay TeX pieces out left to right as separate objects, so each can move, fade or recolour on its own.
+// Returns the objects (not yet added). align: 'center' | 'left'; gap in px.
+function texRow(sc, pieces, { x = 0, y = 0, size = 22, gap = 7, align = 'center', ...rest } = {}) {
+  const ws = pieces.map(p => texWidth(typeof p === 'string' ? p : p.tex, size));
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (pieces.length - 1);
+  let px = sc.X(x) - (align === 'center' ? total / 2 : 0);
+  return pieces.map((p, i) => {
+    const o = Tex({ size, ...rest, ...(typeof p === 'string' ? { tex: p } : p), x: (px - sc.ox) / sc.sx, y, align: 'left' });
+    px += ws[i] + gap; return o;
+  });
+}
+
+// Axes with ticks; returns its parts so they can be created together: sc.addAll(Axes({...})).
+function Axes({ x = [0, 10], y = [0, 6], step = [1, 1], color = 'muted', labels = true, opacity = 1 } = {}) {
+  const parts = [Arrow({ x1: x[0], y1: 0, x2: x[1], y2: 0, color, width: 1.5, opacity }), Arrow({ x1: 0, y1: y[0], x2: 0, y2: y[1], color, width: 1.5, opacity })];
+  if (labels) {
+    for (let v = Math.ceil(x[0] / step[0]) * step[0]; v < x[1]; v += step[0]) if (v) parts.push(Text({ x: v, y: 0, dy: 14, text: String(+v.toFixed(6)), size: 12, color, opacity }));
+    for (let v = Math.ceil(y[0] / step[1]) * step[1]; v < y[1]; v += step[1]) if (v) parts.push(Text({ x: 0, y: v, dx: -10, align: 'right', text: String(+v.toFixed(6)), size: 12, color, opacity }));
+  }
+  return parts;
+}
+// Any custom object: Shape({ ...props, paint(ctx, s, S) { … } }) — all numeric props tween.
+const Shape = p => p;
+
+// MathJax loads after the page: redraw scenes that contain TeX once it is ready.
+// Rebuilding (not just redrawing) lets texRow() measure real glyph widths.
+addEventListener('load', () => window.MathJax?.startup?.promise?.then(() => Scene.all.forEach(s => s.rebuild())));
+// Prose ↔ figure link: <span data-focus="fig-id:tag"> dims everything in that figure except objects tagged `tag`.
+document.addEventListener('pointerover', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('pointerout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('focusout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+
+
+// Text on a small background plate, for labels that sit over lines (call after setting ctx.font and fillStyle).
+function plateText(ctx, text, x, y, align = 'left', pad = 3) {
+  const w = ctx.measureText(text).width, h = parseInt(ctx.font.match(/(\d+)px/)[1]) + 2;
+  const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  const fill = ctx.fillStyle; ctx.fillStyle = tok('bg-2'); ctx.fillRect(x0 - pad, y - h / 2 - 1, w + 2 * pad, h + 2); ctx.fillStyle = fill;
+  ctx.textAlign = align; ctx.fillText(text, x, y);
+}
+
+/* ---------- page chrome: contents rail + reading progress ---------- */
+(() => {
+  const heads = $$('main h2[id]');
+  const list = $('.toc ol');
+  heads.forEach(h => { const li = document.createElement('li'); li.innerHTML = `<a href="#${h.id}">${h.textContent.replace(/^\d+/, m => m + ' ')}</a>`; list.append(li); });
+  const links = $$('.toc a');
+  const bar = $('.progress');
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (max > 0 ? 100 * scrollY / max : 0) + '%';
+    let cur = 0; heads.forEach((h, k) => { if (h.getBoundingClientRect().top < innerHeight * 0.35) cur = k; });
+    links.forEach((a, k) => a.setAttribute('aria-current', k === cur));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+
+/* ================= shared helpers ================= */
+const unit = S => Math.max(.62, Math.min(1, S.w / 780));
+const font = (ctx, px, fam = 'sans', wt = 500) => { ctx.font = `${wt} ${px}px ${tok(fam)}`; };
+const Label = p => Text({ size: 14, color: 'fg-2', ...p });
+const linesFirst = sc => sc.objs.sort((a, b) => ('x1' in b || 'pts' in b) - ('x1' in a || 'pts' in a));
+const mulberry32 = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const fmtT = s => s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min${Math.round(s % 60) ? ` ${Math.round(s % 60)} s` : ''}`;
+const NS = 'http://www.w3.org/2000/svg';
+const svgKit = svg => (tag, a = {}, st = {}, txt) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); Object.assign(e.style, st); if (txt != null) e.textContent = txt; svg.append(e); return e; };
+// A block: rounded rectangle with a label; colour and fill tween.
+const Block = p => ({ w: 2.6, h: 1.3, color: 'fg-2', fill: 'bg-3', label: '', lw: 2, ...p, paint(ctx, s, S) {
+  const x = S.X(s.x - s.w / 2), y = S.Y(s.y + s.h / 2), w = s.w * S.sx, h = s.h * S.sy, u = unit(S);
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fillStyle = paintColor(s.fill); ctx.fill();
+  ctx.lineWidth = s.lw * (1 + .5 * (s.glow || 0)); ctx.strokeStyle = paintColor(s.color); ctx.stroke();
+  if (s.label) { font(ctx, Math.max(11, 13 * u), 'mono', 600); ctx.fillStyle = paintColor(s.color); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s.label, x + w / 2, y + h / 2 + 1); }
+} });
+
+/* ================= "You are here" glyphs ================= */
+$$('svg.here').forEach(svg => {
+  const el = svgKit(svg), on = svg.dataset.on;
+  const A = on === 'ac', F = on === 'fg';
+  for (let i = 0; i < 4; i++) {
+    el('rect', { x: 8 + i * 27, y: 18, width: 20, height: 14, rx: 3 }, { fill: 'none', stroke: A ? 'var(--yellow)' : 'var(--muted)', strokeWidth: A ? 2.5 : 1.5, opacity: A ? 1 : .45 });
+    for (let k = 0; k < 3; k++) el('circle', { cx: 12 + i * 27 + k * 6, cy: 10, r: 2.2 }, { fill: A ? 'var(--yellow)' : 'var(--muted)', opacity: A ? 1 : .45 });
+  }
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) el('circle', { cx: 12 + c * 13, cy: 52 + r * 10, r: 3 }, { fill: F ? 'var(--purple)' : 'var(--muted)', opacity: F ? (c < 5 ? 1 : .35) : .4 });
+  el('text', { x: 60, y: 108, 'text-anchor': 'middle' }, { font: '600 12px var(--sans)', fill: A ? 'var(--yellow)' : 'var(--purple)' }, 'you are here');
+});
+
+/* ================= Figure 1: the whole design in one round ================= */
+(() => {
+  const opts = n => n ? { x: [0, 40], y: [1, 19.6], pad: 8 } : { x: [-1, 40], y: [.8, 19.6], pad: 14 };
+  new Scene('#fig-map', opts, sc => {
+    const n = sc.narrow, BX = s => 4.4 + 4.6 * s, BY = 13.6, Q = 43;   // 2/3 of 64 = 42.7, so 43 votes
+    const blocks = [], comm = [], links = [];
+    for (let s = 0; s < 8; s++) {
+      blocks.push(sc.add(Block({ x: BX(s), y: BY, label: `B${s}`, opacity: 0, w: n ? 3.4 : 2.8, h: n ? 1.5 : 1.3 })));
+      if (s) links.push(sc.add(Arrow({ x1: BX(s) - (n ? 1.75 : 1.45), y1: BY, x2: BX(s - 1) + (n ? 1.75 : 1.45), y2: BY, color: 'muted', width: 1.5, draw: 0 })));
+      comm.push([...Array(8)].map((_, k) => sc.add(Dot({ x: BX(s) - 1.2 + (k % 4) * .8, y: 16 + Math.floor(k / 4) * .8, r: n ? 2.4 : 3.6, color: 'muted', opacity: 0 }))));
+    }
+    const laneA = sc.add(Label({ x: -.6, y: 18.6, align: 'left', text: 'available chain: a committee of 8 votes every slot', size: n ? 11 : 13, color: 'yellow', weight: 600, opacity: 0 }));
+    const laneF = sc.add(Label({ x: -.6, y: 10.2, align: 'left', text: 'finality gadget: all 64 validators, one cohort per slot', size: n ? 11 : 13, color: 'purple', weight: 600, opacity: 0 }));
+    const cohorts = [];
+    for (let c = 0; c < 8; c++) cohorts.push([...Array(8)].map((_, k) => sc.add(Dot({ x: BX(c) - 1.2 + (k % 4) * .8, y: 8.4 - Math.floor(k / 4) * .8, r: n ? 2.4 : 3.6, color: 'muted', opacity: 0 }))));
+    // Two quorum bars: target votes, then finality votes.
+    const bar = (y, col, label) => {
+      const frame = sc.add(Rect({ x: 2.2, y, w: 35.6, h: .7, color: 'rule', fill: 'bg-3', width: 1, radius: 3, opacity: 0 }));
+      const fill = sc.add(Rect({ x: 2.2, y, w: .001, h: .7, color: col, fill: col, width: 0, radius: 3, opacity: 0 }));
+      const lab = sc.add(Label({ x: 2.2, y: y + 1.15, align: 'left', text: label, size: n ? 10 : 12, color: col, opacity: 0 }));
+      return { frame, fill, lab };
+    };
+    const tb = bar(4.4, 'purple', 'target votes for B0 (height h)'), fb = bar(1.8, 'blue', 'next round: finality votes for (h, B0)');
+    const twoThirds = [4.4, 1.8].map(y => sc.add(Line({ x1: 2.2 + 35.6 * 2 / 3, y1: y - .3, x2: 2.2 + 35.6 * 2 / 3, y2: y + 1, color: 'fg', width: 2, opacity: 0 })));
+    const tt = sc.add(Label({ x: 2.2 + 35.6 * 2 / 3, y: 5.75, text: '2/3', size: n ? 10 : 12, color: 'fg', weight: 600, opacity: 0 }));
+    const hMark = sc.add(Label({ x: BX(6), y: BY - 1.45, text: 'height h+1 starts', size: n ? 9 : 11, color: 'teal', weight: 600, opacity: 0 }));
+    const tips = [['finalized', 0, 'blue'], ['confirmed', 6, 'green'], ['head', 7, 'fg']].map(([t, s, c], i) =>
+      sc.add(Label({ x: BX(s), y: BY + 1.45, text: t, size: n ? 9 : 12, color: c, weight: 700, opacity: 0 })));
+    linesFirst(sc);
+
+    sc.play('One round of 8 slots. Each slot, a proposer adds a block to the available chain.', [fadeIn([laneA]), lagged(blocks.map((b, i) => [fadeIn(b), i ? create(links[i - 1]) : []]), .4)], 1.6);
+    sc.play('Every slot a committee of 8 votes for the head. When at least half of a slot\'s committee backs a block, it is locked: confirmed within seconds.',
+      [lagged(comm.map((c, s) => [to(c, { color: 'yellow', opacity: 1 }), s < 7 ? to(blocks[s], { color: 'green', lw: 3 }) : []]), .5)], 2.4, ease.linear);
+    sc.play('Below, all 64 validators split into 8 cohorts. One cohort attests per slot, for the target of height h: block B0.',
+      [fadeIn([laneF, tb.frame, tb.lab, twoThirds[0], tt]), lagged(cohorts.flat().map(fadeIn), .02)], 1.2);
+    sc.play('Cohort after cohort, the target votes add up. Six cohorts make 48 of 64, past two thirds (43).',
+      [lagged(cohorts.slice(0, 6).map((c, i) => [to(c, { color: 'purple' }), to(tb.fill, { opacity: 1, w: 35.6 * (i + 1) * 8 / 64 })]), 0)], 2.2, ease.linear);
+    sc.play('The block that includes the quorum, B6, justifies B0 and opens height h+1 at once, mid-round.', [to(blocks[0], { color: 'teal', fill: 'bg-3', lw: 3.5 }), indicate(blocks[0]), fadeIn(hMark), indicate(blocks[6])], 1.2);
+    sc.play('The last two cohorts vote for the new target. In the next round, attestations also carry a finality vote for (h, B0).',
+      [to([cohorts[6], cohorts[7]].flat(), { color: 'purple' }), fadeIn([fb.frame, fb.lab, twoThirds[1]]), to(fb.fill, { opacity: 1, w: 35.6 * .75 })], 1.6);
+    sc.play('Two thirds of finality votes finalize B0: it can no longer be reverted without slashing a third of all stake.', [to(blocks[0], { color: 'blue', lw: 4 }), indicate(blocks[0])], 1.1);
+    sc.play('Three tips on one chain: B0 finalized, B6 confirmed, B7 the head.', [lagged(tips.map(fadeIn), .4), indicate([blocks[6], blocks[7]])], 1.3);
+  });
+})();
+
+/* ================= Figure 2: where the design comes from ================= */
+(() => {
+  const svg = $('#fig-family svg'), el = svgKit(svg);
+  const lanes = [{ y: 70, name: 'research', col: 'purple' }, { y: 185, name: 'public writing', col: 'teal' }, { y: 300, name: 'spec, code, events', col: 'green' }];
+  lanes.forEach(l => { el('rect', { x: 4, y: l.y - 50, width: 892, height: 100, rx: 10 }, { fill: 'var(--bg-3)', opacity: .5 });
+    el('text', { x: 14, y: l.y - 33 }, { font: '600 11px var(--sans)', letterSpacing: '.08em', fill: `var(--${l.col})` }, l.name.toUpperCase()); });
+  const card = (x, lane, t, s, w = 150) => { const y = lanes[lane].y;
+    el('rect', { x: x - w / 2, y: y - 22, width: w, height: 48, rx: 8 }, { fill: 'var(--bg-2)', stroke: `var(--${lanes[lane].col})`, strokeWidth: 1.6 });
+    el('text', { x, y: y - 2, 'text-anchor': 'middle' }, { font: '600 12.5px var(--sans)', fill: 'var(--fg)' }, t);
+    el('text', { x, y: y + 15, 'text-anchor': 'middle' }, { font: '400 11px var(--sans)', fill: 'var(--muted)' }, s); };
+  card(95, 0, 'Paths to SSF', '2022 · Vitalik');
+  card(270, 0, 'Goldfish, RLMD, 3SF…', '2022–25 · papers');
+  card(455, 0, 'Cambridge 2025', 'Oct 2025 · not BFT-only');
+  card(625, 0, 'Berlin', 'Jan 2026 · split DC / 1RF');
+  card(795, 0, 'Goldilocks', 'Oct 2026 · locks, no SG');
+  card(285, 1, 'ethresear.ch posts', 'Mar 2026 · Luca, Francesco');
+  card(455, 1, 'Upgrading Finality 1', 'May 2026 · EF blog');
+  card(625, 1, 'Stakeholder report', 'Jun–Jul 2026 · EF');
+  card(795, 1, 'One-round finality', '2026 · Yann');
+  card(285, 2, 'dc-networking', 'Jul 2026 · requirements');
+  card(455, 2, 'Cambridge workshop', '13–15 Oct 2026');
+  card(625, 2, 'EIP-8453 · spec · Lean', 'Oct 2026 · drafts, proofs');
+  card(795, 2, 'Devcon → I* fork', 'Nov 2026 → 2027+');
+  el('path', { d: 'M40,375 L880,375' }, { stroke: 'var(--muted)', strokeWidth: 1.5 });
+  el('polygon', { points: '880,375 872,371 872,379' }, { fill: 'var(--muted)' });
+  el('text', { x: 40, y: 392 }, { font: '500 11px var(--sans)', fill: 'var(--muted)' }, 'time →');
+})();
+
+/* ================= Figure 3: Gasper today ================= */
+(() => {
+  const opts = n => n ? { x: [0, 33], y: [-4.2, 9], pad: 8 } : { x: [-1, 99], y: [-1.6, 7.4], pad: 14 };
+  new Scene('#fig-gasper', opts, sc => {
+    const n = sc.narrow;
+    // Wide: 96 slots in one row. Narrow: three rows of 32.
+    const pos = s => n ? [s % 32 + .5, 6 - Math.floor(s / 32) * 3.4] : [s + .5, 4];
+    const cells = [...Array(96)].map((_, s) => { const [x, y] = pos(s); return sc.add(Rect({ x: x - .42, y: y - .5, w: .84, h: 1, radius: 1, color: 'rule', fill: 'bg-3', width: 0, opacity: 0 })); });
+    const epochLab = [0, 1, 2].map(e => { const [x, y] = pos(32 * e); return sc.add(Label({ x: x - .4, y: y + 1.05, align: 'left', text: `epoch ${e + 1}: 32 slots × 12 s = 384 s`, size: n ? 10 : 12, color: 'muted', opacity: 0 })); });
+    const cp = [0, 1, 2, 3].map(e => { const [x, y] = e < 3 ? pos(32 * e) : pos(95); return sc.add(Rect({ x: (e < 3 ? x - .42 : x + .42) - .14, y: y - .9, w: .28, h: 1.8, color: 'fg-2', fill: 'fg-2', width: 0, radius: 1, opacity: 0 })); });
+    const just = sc.add(Label({ x: pos(32)[0], y: pos(32)[1] - 1.5, text: 'justified', size: n ? 10 : 12, color: 'teal', weight: 700, opacity: 0 }));
+    const fin = sc.add(Label({ x: pos(64)[0], y: pos(64)[1] - 1.5, text: 'finalized: 768 s', size: n ? 10 : 12, color: 'blue', weight: 700, opacity: 0 }));
+    const share = sc.add(Text({ x: n ? 0 : -.5, y: n ? -3.4 : -.8, align: 'left', value: 0, fmt: v => `stake heard from in this epoch: ${Math.round(v)}/32`, font: 'mono', size: n ? 11 : 13, color: 'purple', opacity: 0 }));
+    sc.play('Three epochs of 32 slots. Each slot, one thirty-second of the validators attests.', [lagged(cells.map(fadeIn), .01), fadeIn([...epochLab, ...cp.slice(0, 3)])], 1.2);
+    sc.play('Each attestation carries a head vote and an FFG vote. Two thirds of the stake is heard from only after 22 of the 32 slots.',
+      [fadeIn(share), lagged(cells.slice(0, 32).map(c => to(c, { fill: 'purple' })), 0), to(share, { value: 32 }, { value: 0 })], 2.4, ease.linear);
+    sc.play('At the next epoch boundary the checkpoint is justified.', [fadeIn(just), to(cp[1], { fill: 'teal' }), indicate(cp[1])], .9);
+    sc.play('A second epoch of votes finalizes it: 2 × 32 × 12 = 768 s at best. A transaction also waits about half an epoch for its checkpoint, so about 960 s on average.',
+      [lagged(cells.slice(32, 64).map(c => to(c, { fill: 'purple' })), 0), to(share, { value: 32 }, { value: 0 }), fadeIn(fin), to(cp[0], { fill: 'blue' })], 2.4, ease.linear);
+  });
+})();
+
+/* ================= Figure 4: the coupling dilemma ================= */
+(() => {
+  const svg = $('#fig-dilemma svg'), el = svgKit(svg);
+  const rows = [
+    { y: 30, name: 'today', note: '1/32 committees · 12 s slots · finality ≈ 13–16 min', slots: 32, w: 12, col: 'fg-2' },
+    { y: 100, name: 'smaller committees', note: '6 s slots, 96-slot epochs · finality ≈ 19 min (1.5×)', slots: 96, w: 6, col: 'orange' },
+    { y: 170, name: 'larger committees', note: '16-slot epochs, longer slots · finality ≈ 10 min', slots: 16, w: 18.75, col: 'orange' },
+    { y: 240, name: 'decoupled', note: 'short slots for the head, a separate full-set round', slots: 32, w: 12, col: 'green', dc: true },
+  ];
+  const X0 = 150, X1 = 640, sc = (X1 - X0) / (2 * 96 * 6);
+  rows.forEach(r => {
+    el('text', { x: X0 - 10, y: r.y + 14, 'text-anchor': 'end' }, { font: '600 13px var(--sans)', fill: 'var(--fg)' }, r.name);
+    el('text', { x: X0, y: r.y - 4 }, { font: '400 11.5px var(--sans)', fill: 'var(--muted)' }, r.note);
+    const n = r.dc ? 32 : 2 * r.slots;
+    for (let i = 0; i < n; i++) {
+      const x = X0 + i * r.w * sc;
+      el('rect', { x, y: r.y + 2, width: Math.max(.6, r.w * sc - .8), height: 18 }, { fill: `var(--${r.col})`, opacity: .55 });
+    }
+    if (r.dc) { el('rect', { x: X0, y: r.y + 24, width: 8 * 12 * sc, height: 10, rx: 3 }, { fill: 'var(--purple)' });
+      el('rect', { x: X0 + 8 * 12 * sc, y: r.y + 24, width: 8 * 12 * sc, height: 10, rx: 3 }, { fill: 'var(--purple)', opacity: .6 });
+      el('text', { x: X0 + 16 * 12 * sc + 8, y: r.y + 33 }, { font: '500 11px var(--sans)', fill: 'var(--purple)' }, 'full set: one vote per round of 8 slots'); }
+    else el('text', { x: X0 + n * r.w * sc + 6, y: r.y + 15 }, { font: '600 11.5px var(--mono)', fill: 'var(--fg-2)' }, `${Math.round(n * r.w / 60)} min`);
+  });
+  el('text', { x: X0, y: 296 }, { font: '400 11px var(--sans)', fill: 'var(--muted)' }, 'Bars: two finality rounds drawn to one time scale; each tick is one slot.');
+})();
+
+/* ================= Figure 5: vote expiry ================= */
+(() => {
+  const opts = n => n ? { x: [0, 20], y: [-1.6, 23.6], pad: 8 } : { x: [0, 40], y: [-.6, 12], pad: 14 };
+  new Scene('#fig-expiry', opts, sc => {
+    const n = sc.narrow;
+    const panel = (ox, oy, title, keepOld) => {
+      const P = sc.add(Block({ x: ox + 3, y: oy + 5, label: 'P', color: 'fg-2', opacity: 0 }));
+      const H = sc.add(Block({ x: ox + 10, y: oy + 8, label: 'H', color: 'green', opacity: 0 }));
+      const A = sc.add(Block({ x: ox + 10, y: oy + 2, label: 'A', color: 'red', opacity: 0 }));
+      const lH = sc.add(Line({ x1: ox + 4.3, y1: oy + 5.3, x2: ox + 8.7, y2: oy + 7.7, color: 'muted', width: 1.5, opacity: 0 }));
+      const lA = sc.add(Line({ x1: ox + 4.3, y1: oy + 4.7, x2: ox + 8.7, y2: oy + 2.3, color: 'muted', width: 1.5, opacity: 0 }));
+      const hv = [...Array(4)].map((_, k) => sc.add(Dot({ x: ox + 12.2 + k * .9, y: oy + 8, r: 5, color: 'yellow', opacity: 0 })));
+      const old = [...Array(3)].map((_, k) => sc.add(Dot({ x: ox + 12.2 + k * .9, y: oy + 2, r: 5, color: 'red', opacity: 0 })));
+      const now = [...Array(2)].map((_, k) => sc.add(Dot({ x: ox + 14.9 + k * .9, y: oy + 2, r: 5, color: 'red', opacity: 0 })));
+      const t = sc.add(Label({ x: ox + 1, y: oy + 10.6, align: 'left', text: title, size: n ? 12 : 14, color: 'fg', weight: 700, opacity: 0 }));
+      const score = sc.add(Label({ x: ox + 1, y: oy - .2, align: 'left', text: '', font: 'mono', size: n ? 11 : 13, color: 'fg-2', opacity: 0 }));
+      return { P, H, A, lH, lA, hv, old, now, t, score, keepOld };
+    };
+    const L = n ? panel(.5, 12.6, 'LMD-GHOST: every latest vote counts', true) : panel(.5, 0, 'LMD-GHOST: every latest vote counts', true);
+    const G = n ? panel(.5, -.6, 'Goldfish: only last slot\'s votes count', false) : panel(20.5, 0, 'Goldfish: only last slot\'s votes count', false);
+    linesFirst(sc);
+    sc.play('Toy counts. The adversary builds block A in slot t−1 and keeps it hidden, along with its 3 votes for A.', [[L, G].map(p => fadeIn([p.t, p.P, p.A, p.lA, ...p.old.map(o => o)])), [L, G].map(p => to(p.old, { opacity: .3 }))], 1.3);
+    sc.play('In slot t the honest proposer builds H, and 4 honest committee members vote for it.', [[L, G].map(p => [fadeIn([p.H, p.lH]), lagged(p.hv.map(fadeIn), .3)])], 1.2);
+    sc.play('The adversary releases A with its withheld votes, plus 2 fresh votes in slot t.', [[L, G].map(p => [to(p.old, { opacity: 1 }), lagged(p.now.map(fadeIn), .3)])], 1.1);
+    sc.play('LMD-GHOST counts all 5 votes for A against 4 for H, and reorgs the honest block. Goldfish drops the 3 expired votes: H wins 4 to 2.',
+      [to(L.score, { opacity: 1, text: 'A: 3 + 2 = 5 > H: 4 → reorg', color: 'red' }), to(L.H, { opacity: .35 }), to(L.A, { lw: 4 }),
+       to(G.old, { opacity: .15 }), to(G.score, { opacity: 1, text: 'A: 2 < H: 4 → H stays', color: 'green' }), indicate(G.H)], 1.6);
+  });
+})();
+
+/* ================= Figure 6: Goldilocks locks ================= */
+(() => {
+  const opts = n => n ? { x: [0, 22], y: [-3, 16], pad: 8 } : { x: [0, 40], y: [-.6, 13], pad: 14 };
+  new Scene('#fig-locks', opts, sc => {
+    const n = sc.narrow, k = 4;
+    const A = sc.add(Block({ x: n ? 2.5 : 4, y: 6, label: 'A', opacity: 0 }));
+    const B = sc.add(Block({ x: n ? 8 : 12, y: 9, label: 'B', opacity: 0 }));
+    const C = sc.add(Block({ x: n ? 8 : 12, y: 3, label: 'C', color: 'red', opacity: 0 }));
+    const lB = sc.add(Line({ x1: (n ? 2.5 : 4) + 1.3, y1: 6.4, x2: (n ? 8 : 12) - 1.3, y2: 8.7, color: 'muted', width: 1.5, opacity: 0 }));
+    const lC = sc.add(Line({ x1: (n ? 2.5 : 4) + 1.3, y1: 5.6, x2: (n ? 8 : 12) - 1.3, y2: 3.3, color: 'muted', width: 1.5, opacity: 0 }));
+    const cx = n ? 11.5 : 20, comm = [...Array(8)].map((_, i) => sc.add(Dot({ x: cx + (i % 4) * 1.4, y: 10.5 - Math.floor(i / 4) * 1.3, r: n ? 6 : 8, color: 'muted', opacity: 0 })));
+    const cLab = sc.add(Label({ x: cx - .6, y: 12.4, align: 'left', text: 'one slot\'s committee: 8 seats', size: n ? 11 : 13, color: 'fg-2', opacity: 0 }));
+    const lock = sc.add(Label({ x: n ? 8 : 12, y: 10.6, text: '🔒 locked', size: n ? 11 : 13, color: 'green', weight: 700, opacity: 0 }));
+    const note = sc.add(Label({ x: n ? 0 : 0, y: n ? -1.6 : .2, align: 'left', text: '', size: n ? 11 : 13, color: 'fg-2', opacity: 0 }));
+    const timer = [...Array(k)].map((_, i) => sc.add(Rect({ x: (n ? 11.5 : 30) + i * 1.6, y: n ? 1 : 9, w: 1.3, h: .6, radius: 2, color: 'green', fill: 'green', width: 0, opacity: 0 })));
+    const tLab = sc.add(Label({ x: n ? 11.5 : 30, y: n ? 2.4 : 10.4, align: 'left', text: `lock expires after k = ${k} slots`, size: n ? 10 : 12, color: 'green', opacity: 0 }));
+    linesFirst(sc);
+    sc.play('Block A, then B on top of it. A committee of 8 votes in the slot.', [fadeIn([A, B, lB, cLab]), lagged(comm.map(fadeIn), .1)], 1.2);
+    sc.play('5 of the 8 vote for B: at least half of the whole committee, so B is fast-locked.', [lagged(comm.slice(0, 5).map(c => to(c, { color: 'yellow' })), .2), to(B, { color: 'green', lw: 3 }), fadeIn(lock)], 1.3);
+    sc.play('A slot of asynchrony: honest votes are delayed and the adversary pushes a fork C. Goldfish alone would follow the one slot of votes it sees.', [fadeIn([C, lC]), to(comm.slice(5), { color: 'red' }), to(comm.slice(0, 5), { opacity: .25 }), to(note, { opacity: 1, text: 'only 3 adversarial votes arrive on time' })], 1.4);
+    sc.play('But the fork choice starts from the deepest locked block. B is locked, so the head stays on B\'s branch.', [indicate(B), to(note, { text: 'lock holds: head stays above B', color: 'green' }), to(C, { opacity: .4 })], 1.2);
+    sc.play('Locks do not last forever: each expires k slots after it is set.', [lagged(timer.map(fadeIn), .3), fadeIn(tLab)], 1.2);
+    sc.play('And if at least half of a later committee votes against B, the lock steps back to A at once.', [to(comm, { opacity: 1, color: 'red' }), to(B, { color: 'fg-2', lw: 2 }), to(A, { color: 'green', lw: 3 }), to(lock, { x: n ? 2.5 : 4, y: 7.6 }), to(note, { text: '≥ 4 of 8 against B: lock moves back to A', color: 'fg-2' })], 1.3);
+  });
+})();
+
+/* ================= Figure 7: dynamic availability and the inactivity leak ================= */
+(() => {
+  const fig = $('#fig-leak'), canvas = $('canvas', fig), out = $('.readout', fig), ROUND = 96, LEAK = 16;
+  let off = .5;
+  const share = r => { const s = Math.min(65536, 4 * Math.max(0, r - LEAK)), w = 1 - (s / 65536) ** 2; return (1 - off) / ((1 - off) + off * w); };
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560;
+    // Top: the available chain keeps producing blocks; offline validators greyed in the committee.
+    const top = narrow ? 14 : 40, bw = narrow ? 18 : 26, gap = 6, nb = Math.floor((w - 32) / (bw + gap));
+    font(ctx, 12, 'sans', 600); ctx.fillStyle = tok('yellow'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`available chain: ${off < 1 ? 'a block every slot' : 'halted'}`, 16, top - 4);
+    for (let i = 0; i < nb; i++) { ctx.strokeStyle = tok(off < 1 ? 'green' : 'muted'); ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(16 + i * (bw + gap), top, bw, 16, 3); ctx.stroke(); }
+    // Bottom: online share of finality weight over rounds, with the 2/3 line.
+    const L = narrow ? 40 : 54, R = w - 16, T = top + 56, B = h - 34, RMAX = 16384;
+    const px = r => L + r / RMAX * (R - L), py = v => B - (v - .25) / .75 * (B - T);
+    font(ctx, 11, 'mono'); ctx.fillStyle = tok('muted'); ctx.textBaseline = 'middle';
+    [.25, .5, 2 / 3, .75, 1].forEach(v => { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(L, py(v)); ctx.lineTo(R, py(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(v === 2 / 3 ? '2/3' : `${Math.round(v * 100)}%`, L - 5, py(v)); });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let d = 0; d <= 18; d += narrow ? 6 : 3) { const r = d * 86400 / ROUND; if (r <= RMAX) ctx.fillText(`${d} d`, px(r), B + 5); }
+    font(ctx, 11, 'sans'); ctx.fillText('days since finality stalled (rounds of 96 s)', (L + R) / 2, B + 18);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillStyle = tok('purple'); font(ctx, 12, 'sans', 600); ctx.fillText('finality gadget: online share of finality weight', L, T - 6);
+    ctx.strokeStyle = tok('red'); ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(L, py(2 / 3)); ctx.lineTo(R, py(2 / 3)); ctx.stroke(); ctx.setLineDash([]);
+    let cross = -1; ctx.strokeStyle = tok('purple'); ctx.lineWidth = 2.6; ctx.beginPath();
+    for (let r = 0; r <= RMAX; r += 32) { const v = share(r); if (cross < 0 && v >= 2 / 3 - 1e-9) cross = r; r ? ctx.lineTo(px(r), py(v)) : ctx.moveTo(px(r), py(v)); } ctx.stroke();
+    if (cross >= 0) { ctx.fillStyle = tok('blue'); ctx.beginPath(); ctx.arc(px(cross), py(share(cross)), 5, 0, 2 * Math.PI); ctx.fill();
+      font(ctx, 11, 'sans', 600); ctx.textAlign = cross > RMAX * .6 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(cross ? 'finality resumes' : 'finality never stalls', px(cross) + (cross > RMAX * .6 ? -8 : 8), py(share(cross)) - 6); }
+    out.textContent = off <= 1 / 3 ? `${Math.round(off * 100)}% offline: two thirds still online, finality continues`
+      : `${Math.round(off * 100)}% offline: finality resumes after ≈ ${Math.round(cross)} rounds ≈ ${(cross * ROUND / 86400).toFixed(1)} days`;
+  });
+  range($('#lk-off'), v => { off = v / 100; paint(); });
+})();
+
+/* ================= Figure 8: heights, justification and finality ================= */
+(() => {
+  const opts = n => n ? { x: [0, 22], y: [-1.5, 17], pad: 8 } : { x: [0, 40], y: [-.6, 12.4], pad: 14 };
+  new Scene('#fig-heights', opts, sc => {
+    const n = sc.narrow, NB = n ? 8 : 10, X = i => (n ? 1.6 : 2) + i * (n ? 2.65 : 3.9), Y = n ? 13 : 9.6;
+    const blocks = [...Array(NB)].map((_, i) => sc.add(Block({ x: X(i), y: Y, w: n ? 2 : 2.6, label: n ? `${i}` : `b${i}`, opacity: 0 })));
+    const T1 = 1, T2 = n ? 4 : 5;
+    const hLab = (i, t, c) => sc.add(Label({ x: X(i), y: Y + 1.4, text: t, size: n ? 10 : 12, color: c, weight: 600, opacity: 0 }));
+    const h0 = hLab(T1, 'target of h', 'purple'), h1 = hLab(T2, 'target of h+1', 'purple');
+    const bar = (y, col, lab) => ({ frame: sc.add(Rect({ x: X(0) - 1, y, w: X(NB - 1) - X(0) + 2, h: .8, radius: 3, color: 'rule', fill: 'bg-3', width: 1, opacity: 0 })),
+      fill: sc.add(Rect({ x: X(0) - 1, y, w: .001, h: .8, radius: 3, color: col, fill: col, width: 0, opacity: 0 })),
+      lab: sc.add(Label({ x: X(0) - 1, y: y + 1.3, align: 'left', text: lab, size: n ? 10 : 12, color: col, opacity: 0 })) });
+    const W = X(NB - 1) - X(0) + 2, tq = bar(n ? 9 : 6.4, 'purple', 'height votes for (h, b1)'), fq = bar(n ? 5.6 : 3.6, 'blue', 'finality votes for (h, b1), carried at height h+1');
+    const twoT = [tq, fq].map(b => sc.add(Line({ x1: X(0) - 1 + W * 2 / 3, y1: b.frame.y - .3, x2: X(0) - 1 + W * 2 / 3, y2: b.frame.y + 1.1, color: 'fg', width: 2, opacity: 0 })));
+    // Timeout case.
+    const toFrame = sc.add(Rect({ x: X(0) - 1, y: n ? 1.6 : .8, w: W, h: .8, radius: 3, color: 'rule', fill: 'bg-3', width: 1, opacity: 0 }));
+    const to1 = sc.add(Rect({ x: X(0) - 1, y: n ? 1.6 : .8, w: .001, h: .8, radius: 3, color: 'purple', fill: 'purple', width: 0, opacity: 0 }));
+    const to2 = sc.add(Rect({ x: X(0) - 1, y: n ? 1.6 : .8, w: .001, h: .8, radius: 3, color: 'orange', fill: 'orange', width: 0, opacity: 0 }));
+    const toLab = sc.add(Label({ x: X(0) - 1, y: (n ? 1.6 : .8) + 1.3, align: 'left', text: n ? 'stall: 40% target + 30% timeouts → next height' : 'other case: target 40% + timeouts 30% = 70% after 8 slots → next height, nothing justified', size: n ? 10 : 12, color: 'orange', opacity: 0 }));
+    linesFirst(sc);
+    sc.play('Blocks arrive slot by slot. Block b1 is the first block of height h, so it is the target.', [lagged(blocks.map(fadeIn), .2), fadeIn(h0)], 1.3);
+    sc.play('Attestations voting for (h, b1) are included block by block.', [fadeIn([tq.frame, tq.lab, twoT[0]]), to(tq.fill, { opacity: 1, w: W * .7 })], 1.6, ease.linear);
+    sc.play(`Two thirds reached: the including block b${T2} justifies b1 and becomes the first block, and target, of height h+1.`, [to(blocks[T1], { color: 'teal', lw: 3.5 }), indicate(blocks[T1]), fadeIn(h1), to(blocks[T2], { color: 'purple' })], 1.2);
+    sc.play('Attestations at height h+1 also carry a finality vote for the justified (h, b1).', [fadeIn([fq.frame, fq.lab, twoT[1]]), to(fq.fill, { opacity: 1, w: W * .7 })], 1.6, ease.linear);
+    sc.play('Two thirds of finality votes: b1 is finalized. No epoch boundary was needed.', [to(blocks[T1], { color: 'blue', lw: 4 }), indicate(blocks[T1])], 1);
+    sc.play('If a target stalls, timeouts count too: after 8 slots, target votes plus timeouts at two thirds move to the next height without justifying.',
+      [fadeIn([toFrame, toLab]), to(to1, { opacity: 1, w: W * .4 }), to(to2, { opacity: 1, x: X(0) - 1 + W * .4, w: W * .3 })], 1.6);
+  });
+})();
+
+/* ================= Figure 9: quorum overlap ================= */
+(() => {
+  const svg = $('#fig-overlap svg'), el = svgKit(svg), X0 = 60, W = 600, x = f => X0 + f * W;
+  el('rect', { x: X0, y: 40, width: W, height: 26, rx: 4 }, { fill: 'var(--bg-3)', stroke: 'var(--rule)' });
+  el('text', { x: X0, y: 32 }, { font: '600 12px var(--sans)', fill: 'var(--fg-2)' }, 'all validators');
+  el('rect', { x: x(0), y: 90, width: x(2 / 3) - x(0), height: 26, rx: 4 }, { fill: 'var(--teal)', opacity: .8 });
+  el('text', { x: x(0) + 8, y: 108 }, { font: '600 12px var(--sans)', fill: 'var(--bg)' }, 'quorum finalizing block X: 2/3');
+  el('rect', { x: x(1 / 3), y: 130, width: x(1) - x(1 / 3), height: 26, rx: 4 }, { fill: 'var(--blue)', opacity: .8 });
+  el('text', { x: x(1) - 8, y: 148, 'text-anchor': 'end' }, { font: '600 12px var(--sans)', fill: 'var(--bg)' }, 'quorum finalizing conflicting Y: 2/3');
+  el('rect', { x: x(1 / 3), y: 170, width: x(2 / 3) - x(1 / 3), height: 26, rx: 4 }, { fill: 'var(--red)' });
+  el('text', { x: (x(1 / 3) + x(2 / 3)) / 2, y: 188, 'text-anchor': 'middle' }, { font: '700 12px var(--sans)', fill: 'var(--bg)' }, 'overlap ≥ 1/3: signed both, slashable');
+  [1 / 3, 2 / 3].forEach(f => el('line', { x1: x(f), y1: 36, x2: x(f), y2: 200 }, { stroke: 'var(--muted)', strokeDasharray: '4 4' }));
+  ['0', '1/3', '2/3', '1'].forEach((t, i) => el('text', { x: x(i / 3), y: 220, 'text-anchor': 'middle' }, { font: '500 11px var(--mono)', fill: 'var(--muted)' }, t));
+})();
+
+/* ================= Figure 10: the interface ================= */
+(() => {
+  const svg = $('#fig-interface svg'), el = svgKit(svg);
+  const box = (x, y, w, h, col, title, lines) => {
+    el('rect', { x, y, width: w, height: h, rx: 10 }, { fill: 'var(--bg-2)', stroke: `var(--${col})`, strokeWidth: 2 });
+    el('text', { x: x + 14, y: y + 26 }, { font: '700 14px var(--sans)', fill: `var(--${col})` }, title);
+    lines.forEach((t, i) => el('text', { x: x + 14, y: y + 50 + i * 19 }, { font: '400 12.5px var(--sans)', fill: 'var(--fg-2)' }, t));
+  };
+  box(20, 30, 270, 200, 'purple', 'Finality gadget', ['block tree, per-block state σ', 'finalized F, justified J, heights', 'attestation pool (no age limit)', 'finality votes from everyone,', 'once per round']);
+  box(430, 30, 270, 200, 'yellow', 'Available chain (Goldilocks)', ['head votes of the slot committee', 'locks and confirmations', 'runs the fork choice', 'no block store of its own', 'never reads finality votes']);
+  const arrow = (x1, y, x2, col, label, sub) => {
+    el('line', { x1, y1: y, x2, y2: y }, { stroke: `var(--${col})`, strokeWidth: 2.5 });
+    const d = x2 > x1 ? -1 : 1; el('polygon', { points: `${x2},${y} ${x2 + d * 10},${y - 5} ${x2 + d * 10},${y + 5}` }, { fill: `var(--${col})` });
+    el('text', { x: (x1 + x2) / 2, y: y - 9, 'text-anchor': 'middle' }, { font: '600 12px var(--sans)', fill: `var(--${col})` }, label);
+    el('text', { x: (x1 + x2) / 2, y: y + 18, 'text-anchor': 'middle' }, { font: '400 11px var(--sans)', fill: 'var(--muted)' }, sub);
+  };
+  arrow(292, 95, 428, 'purple', 'frame Φ', 'tree · fc_root · viable heads');
+  arrow(428, 175, 292, 'yellow', 'once per round', 'fg_confirmed · head');
+  el('text', { x: 20, y: 270 }, { font: '400 12px var(--sans)', fill: 'var(--fg-2)' }, 'fg_confirmed (deepest fast-locked block) gives the height vote; the head gives the finality vote.');
+  el('text', { x: 20, y: 290 }, { font: '400 12px var(--sans)', fill: 'var(--fg-2)' }, 'No fast-locked block, no attestation: finality traffic fades by itself when the chain is unstable.');
+})();
+
+/* ================= Figure 11: one round ================= */
+(() => {
+  const svg = $('#fig-round svg'), el = svgKit(svg), X0 = 30, W = 660, sw = W / 8;
+  for (let s = 0; s < 8; s++) {
+    const x = X0 + s * sw;
+    el('text', { x: x + sw / 2, y: 26, 'text-anchor': 'middle' }, { font: '600 12px var(--sans)', fill: 'var(--fg-2)' }, `slot ${s}`);
+    ['propose', 'vote', 'cutoff', 'freeze'].forEach((p, i) => el('rect', { x: x + i * sw / 4 + .5, y: 36, width: sw / 4 - 1, height: 22 }, { fill: ['var(--fg-2)', 'var(--yellow)', 'var(--orange)', 'var(--muted)'][i], opacity: .55 }));
+    for (let k = 0; k < 10; k++) el('circle', { cx: x + 8 + k * (sw - 16) / 9, cy: 80, r: 3 }, { fill: 'var(--yellow)' });
+    el('rect', { x: x + 4, y: 104, width: sw - 8, height: 34, rx: 4 }, { fill: 'var(--purple)', opacity: .25 + .08 * s });
+    el('text', { x: x + sw / 2, y: 126, 'text-anchor': 'middle' }, { font: '600 11px var(--mono)', fill: 'var(--fg)' }, `${256 * s}–${256 * s + 255}`);
+  }
+  el('text', { x: X0, y: 98 }, { font: '500 11.5px var(--sans)', fill: 'var(--yellow)' }, 'head-vote committee: 1,024 seats every slot (512 in the EIP; VRF-512 proposed)');
+  el('text', { x: X0, y: 156 }, { font: '500 11.5px var(--sans)', fill: 'var(--purple)' }, 'finality committees 0–2,047: 256 per slot, every validator once per round');
+  const leg = [['propose 0', 'fg-2'], ['head vote Δ', 'yellow'], ['support cutoff 2Δ', 'orange'], ['freeze 3Δ', 'muted']];
+  leg.forEach(([t, c], i) => { el('rect', { x: X0 + i * 165, y: 180, width: 12, height: 12, rx: 2 }, { fill: `var(--${c})`, opacity: .7 }); el('text', { x: X0 + 18 + i * 165, y: 190 }, { font: '500 12px var(--sans)', fill: 'var(--fg-2)' }, t); });
+  el('text', { x: X0, y: 222 }, { font: '400 12px var(--sans)', fill: 'var(--fg-2)' }, 'Slot = 4Δ = 12 s, so Δ = 3 s. Locks against slot-s votes update at 5Δ, confirmations at 6Δ (inside slot s + 1).');
+  el('text', { x: X0, y: 244 }, { font: '400 12px var(--sans)', fill: 'var(--fg-2)' }, 'Round = 8 slots = 96 s. Goldilocks needs R ≥ max(2, ⌈(6Δ + Δ_F) / 4Δ⌉) slots; lock window k ≥ 2 slots.');
+  el('text', { x: X0, y: 266 }, { font: '400 12px var(--sans)', fill: 'var(--fg-2)' }, 'Epochs of 32 slots remain for RANDAO, validator management and builder duties.');
+})();
+
+/* ================= Figure 12: pipelined committee units ================= */
+(() => {
+  const fig = $('#fig-units'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const VS = [1.1e6, 5e5, 1.28e5, 1.6e4], VL = ['1.1M', '500k', '128k', '16k'];
+  let D = 4, V = VS[0];
+  const model = () => {
+    const units = Math.floor((96 - 4 - 4) / D) + 1, c = V / units / 64, agg = Math.ceil(c / 8) + 240;
+    return { units, c, perUnit: c * 140 + Math.min(16, c) * agg, global: 16 * 64 * (12 / D) * agg, pq: c * 3.7 / 1000 };
+  };
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, m = model(), L = 16, R = w - 16, T = narrow ? 14 : 64, rows = Math.ceil(8 / D) + 1;
+    const px = t => L + t / 96 * (R - L), rh = Math.min(34, (h - T - 70) / rows);
+    for (let s = 0; s <= 8; s++) { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(px(12 * s), T); ctx.lineTo(px(12 * s), T + rows * rh + 8); ctx.stroke();
+      if (s < 8) { font(ctx, 11, 'sans'); ctx.fillStyle = tok('muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(narrow ? `${s}` : `slot ${s}`, px(12 * s + 6), T + rows * rh + 12); } }
+    for (let u = 0; u < m.units; u++) {
+      const t0 = u * D, y = T + (u % rows) * rh;
+      ctx.fillStyle = tok('purple'); ctx.globalAlpha = .75; ctx.fillRect(px(t0), y, px(t0 + 4) - px(t0) - 1, rh - 4);
+      ctx.fillStyle = tok('orange'); ctx.fillRect(px(t0 + 4), y, px(t0 + 8) - px(t0 + 4) - 1, rh - 4); ctx.globalAlpha = 1;
+    }
+    font(ctx, 12, 'sans', 600); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const ly = T + rows * rh + 32;
+    ctx.fillStyle = tok('purple'); ctx.fillText('■ a unit votes for 4 s', L, ly); ctx.fillStyle = tok('orange'); ctx.fillText('■ then aggregates for 4 s', L + (narrow ? 0 : 170), ly + (narrow ? 18 : 0));
+    out.textContent = `${m.units} units per round · ${Math.round(m.c).toLocaleString('en-US')} validators per subnet per unit · ${(m.perUnit / 1e3).toFixed(0)} kB per subnet per unit · global ${(m.global / 1e6).toFixed(2)} MB per slot · PQ proof ≈ ${m.pq.toFixed(1)} s ${m.pq <= 4 ? '(fits 4 s)' : '(misses 4 s)'}`;
+  });
+  range($('#un-d'), v => { D = v; paint(); });
+  range($('#un-v'), v => { V = VS[v]; paint(); }, v => VL[v]);
+})();
+
+/* ================= Figure 13: simulation results ================= */
+(() => {
+  const svg = $('#fig-sims svg'), el = svgKit(svg);
+  const draw = () => {
+    const narrow = svg.clientWidth > 0 && svg.clientWidth < 560, W = narrow ? 380 : 720, H = narrow ? 520 : 300;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.replaceChildren();
+    const chart = (ox, oy, cw, title, rows, max, unitS, col) => {
+      el('text', { x: ox, y: oy }, { font: '600 13px var(--sans)', fill: 'var(--fg)' }, title);
+      rows.forEach(([lab, v, c], i) => { const y = oy + 18 + i * 44;
+        el('text', { x: ox, y: y + 10 }, { font: '500 11.5px var(--sans)', fill: 'var(--fg-2)' }, lab);
+        el('rect', { x: ox, y: y + 16, width: Math.max(2, v / max * (cw - 70)), height: 16, rx: 3 }, { fill: `var(--${c || col})`, opacity: .85 });
+        el('text', { x: ox + v / max * (cw - 70) + 6, y: y + 29 }, { font: '600 11.5px var(--mono)', fill: 'var(--fg)' }, `${v.toLocaleString('en-US')} ${unitS}`); });
+    };
+    chart(14, 22, narrow ? W - 20 : 380, 'finality-vote arrival p99 (eth-slot-sim)', [['no sub-rounds', 11984, 'red'], ['10 sub-rounds', 1825], ['5 sub-rounds', 2788], ['5 sub-rounds, batched', 1432]], 12500, 'ms', 'purple');
+    chart(narrow ? 14 : 420, narrow ? 240 : 22, narrow ? W - 20 : 290, 'attestation p90, 5 Mbit/s uplink (Prysm)', [['baseline', 5.6, 'red'], ['votes first', 4.3], ['uplink-wide gate', 4.45], ['blocks first', 5.0, 'muted']], 6.2, 's', 'yellow');
+  };
+  new ResizeObserver(draw).observe(svg); draw();
+})();
+
+/* ================= Figure 14: rewards ================= */
+(() => {
+  const fig = $('#fig-rewards'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const ac = d => d === 1 ? 1 : 0, att = d => d === 1 ? 1 : (7 / 8) * (23 / 24) ** (d - 2), prop = d => .5 ** (d - 1);
+  let D = 1;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560;
+    // Left: weights out of 64.
+    const parts = [['head vote', 6, 'yellow'], ['proposer', 4, 'muted'], ['height vote', 24, 'purple'], ['proposer', 3, 'muted'], ['finality vote', 24, 'blue'], ['proposer', 3, 'muted']];
+    const bx = 16, by = narrow ? 30 : 70, bw = narrow ? w - 32 : w * .36, bh = 26;
+    font(ctx, 12, 'sans', 600); ctx.fillStyle = tok('fg-2'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText('reward weights (sum 64)', bx, by - 6);
+    let x = bx; parts.forEach(([lab, v, c], i) => { const ww = v / 64 * bw; ctx.fillStyle = tok(c); ctx.globalAlpha = c === 'muted' ? .6 : .85; ctx.fillRect(x, by, ww - 1, bh); ctx.globalAlpha = 1;
+      if (ww > 28) { font(ctx, 11, 'mono', 600); ctx.fillStyle = tok('bg'); ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillText(v, x + ww / 2, by + bh / 2); } x += ww; });
+    font(ctx, 11, 'sans'); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    [['head vote 6 + 4', 'yellow'], ['height vote 24 + 3', 'purple'], ['finality vote 24 + 3', 'blue']].forEach(([t, c], i) => { ctx.fillStyle = tok(c); ctx.fillText(t, bx + (narrow ? (i % 2) * 150 : 0), by + bh + 8 + (narrow ? Math.floor(i / 2) * 16 : i * 16)); });
+    // Right: remaining fraction against inclusion delay.
+    const L = narrow ? 44 : w * .46, R = w - 16, T = narrow ? by + bh + 70 : 60, B = h - 34, DM = 24;
+    const px = d => L + (d - 1) / (DM - 1) * (R - L), py = v => B - v * (B - T);
+    font(ctx, 11, 'mono'); ctx.fillStyle = tok('muted');
+    [0, .5, 1].forEach(v => { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(L, py(v)); ctx.lineTo(R, py(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(`${v * 100}%`, L - 5, py(v)); });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; [1, 6, 12, 18, 24].forEach(d => ctx.fillText(d, px(d), B + 4));
+    font(ctx, 11, 'sans'); ctx.fillText('slots until inclusion', (L + R) / 2, B + 17);
+    [[ac, 'yellow'], [att, 'purple'], [prop, 'muted']].forEach(([f, c]) => { ctx.strokeStyle = tok(c); ctx.lineWidth = 2.4; ctx.beginPath(); for (let d = 1; d <= DM; d++) d === 1 ? ctx.moveTo(px(d), py(f(d))) : ctx.lineTo(px(d), py(f(d))); ctx.stroke(); });
+    ctx.strokeStyle = tok('fg'); ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(px(D), T); ctx.lineTo(px(D), B); ctx.stroke(); ctx.setLineDash([]);
+    font(ctx, 11, 'sans', 600); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = tok('purple'); ctx.fillText('height and finality votes', px(10), py(att(10)) - 6); ctx.fillStyle = tok('muted'); ctx.fillText('proposer share', px(3) + 6, py(prop(3)) - 4);
+    const left = 6 * ac(D) + 48 * att(D);
+    out.textContent = `included after ${D} slot${D > 1 ? 's' : ''}: head vote ${Math.round(100 * ac(D))}%, height and finality ${Math.round(100 * att(D))}%, proposer ${Math.round(100 * prop(D))}% · attester keeps ${left.toFixed(1)} of 54`;
+  });
+  range($('#rw-d'), v => { D = v; paint(); });
+})();
+
+/* ================= Figure 15: how fast (finality.watch model) ================= */
+(() => {
+  const fig = $('#fig-speed'), canvas = $('canvas', fig), out = $('.readout', fig);
+  const VS = [1.1e6, 903114, 640e3, 384e3, 128e3, 16e3], VL = ['1.1M', '903k', '640k', '384k', '128k', '16k'];
+  let V = VS[0], slot = 12, rounds = 2, dc = true, more = false;
+  // finality.watch: raw = 384 s · N / 1.1M, divided by the gains, rounded up to whole slots (4 s floor).
+  const fw = (v, sl, d, m, r) => { const src = v <= 128e3 ? 1 : v >= 5e5 ? 2 : 1 + (v - 128e3) / 372e3;
+    const g = (d ? 4 : 1) * (m ? 2 * src : 1), f = Math.max(4, 384 * v / 1.1e6 / g), rr = Math.max(1, Math.ceil(f / sl)) * sl;
+    return { round: rr, total: sl / 2 + rr / 2 + r * rr }; };
+  const bands = [[.3, 1, 'blobs, alt-L1 parity', false], [1, 4, 'point of sale, games', false], [10, 20, 'swaps, bridges, intents', true], [20, 30, 'deposits, interactive', true], [30, 60, 'stop feeling slow', true], [60, 180, 'L2 deposits, blob pricing', true], [180, 300, 'light-client bridges', true]];
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, L = 16, R = w - 16, lo = Math.log10(.3), hi = Math.log10(1200), px = t => L + (Math.log10(t) - lo) / (hi - lo) * (R - L);
+    const T = narrow ? 16 : 40, bandH = narrow ? 150 : 110;
+    bands.forEach(([a, b, lab, core], i) => { ctx.fillStyle = tok(core ? 'green' : 'muted'); ctx.globalAlpha = core ? .16 + .04 * (i % 2) : .1; ctx.fillRect(px(a), T, px(b) - px(a), bandH); ctx.globalAlpha = 1;
+      ctx.save(); ctx.translate(px(Math.sqrt(a * b)) + 4, T + 6); ctx.rotate(Math.PI / 2); font(ctx, 10.5, 'sans'); ctx.fillStyle = tok(core ? 'green' : 'muted'); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(lab, 0, 0); ctx.restore(); });
+    font(ctx, 11, 'mono'); ctx.fillStyle = tok('muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [[1, '1 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [1200, '20 min']].forEach(([t, l]) => { ctx.textAlign = t === 1200 ? 'right' : 'center'; ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(px(t), T); ctx.lineTo(px(t), T + bandH + 70); ctx.stroke(); ctx.fillText(l, px(t), T + bandH + 74); });
+    const today = fw(1.1e6, 12, false, false, 2).total, r = fw(V, slot, dc, more, rounds);
+    const y1 = T + bandH + 16, y2 = T + bandH + 44;
+    ctx.fillStyle = tok('muted'); ctx.fillRect(px(.3), y1, px(today) - px(.3), 14); font(ctx, 11, 'sans', 600); ctx.fillStyle = tok('bg'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(`today ${fmtT(today)}`, px(today) - 6, y1 + 7);
+    ctx.fillStyle = tok('blue'); ctx.fillRect(px(.3), y2, px(r.total) - px(.3), 18); const lab = `model: ${fmtT(r.total)}`, inside = px(r.total) + 6 + ctx.measureText(lab).width > R; ctx.fillStyle = tok(inside ? 'bg' : 'fg'); ctx.textAlign = inside ? 'right' : 'left'; ctx.fillText(lab, px(r.total) + (inside ? -6 : 6), y2 + 9);
+    out.textContent = `${VL[VS.indexOf(V)]} identities · ${slot} s slots · ${rounds} round${rounds > 1 ? 's' : ''} · ${dc ? 'decoupled' : 'coupled'}${more ? ' + bundling, batching' : ''}: round ${r.round} s, finality ≈ ${fmtT(r.total)}`;
+  });
+  range($('#sp-v'), v => { V = VS[v]; paint(); }, v => VL[v]);
+  range($('#sp-s'), v => { slot = v; paint(); });
+  range($('#sp-r'), v => { rounds = v; paint(); });
+  const tog = (id, set) => { const b = $(id); b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); set(on); paint(); }; };
+  tog('#sp-dc', v => dc = v); tog('#sp-more', v => more = v);
+})();
+
+/* ================= Figure 16: one transaction's journey ================= */
+(() => {
+  const opts = n => n ? { x: [0, 10], y: [0, 8], pad: 12 } : { x: [0, 10], y: [0, 3.2], pad: 18 };
+  new Scene('#fig-journey', opts, sc => {
+    const n = sc.narrow, X = t => .3 + Math.sqrt(t / 1000) * 9.4;   // square-root time axis, 0 to 1,000 s
+    const Yd = n ? 5.2 : 2.1, Yt = n ? 2 : .75, bh = n ? .5 : .3;
+    const ticks = [0, 10, 60, 120, 300, 600, 960].map(t => sc.add(Label({ x: X(t), y: n ? .5 : .05, text: t < 60 ? `${t} s` : `${t / 60} min`, size: n ? 9.5 : 11, color: 'muted', font: 'mono', opacity: 0 })));
+    const stages = [[0, 6, 'included', 'fg-2'], [6, 18, 'confirmed', 'green'], [18, 72, 'round starts', 'muted'], [72, 144, 'justified', 'teal'], [144, 228, 'finalized', 'blue']];
+    const segs = stages.map(([a, b, , c]) => sc.add(Rect({ x: X(a), y: Yd - bh / 2, w: Math.max(.02, X(b) - X(a) - .02), h: bh, color: c, fill: c, width: 0, radius: 2, opacity: 0 })));
+    const labs = stages.map(([, b, t, c], i) => sc.add(Label({ x: X(b), y: Yd, dy: i % 2 ? 26 : -24, align: 'right', text: `${t} ${fmtT(b)}`, size: n ? 9.5 : 11.5, color: c, weight: 600, opacity: 0 })));
+    const dcL = sc.add(Label({ x: X(0), y: Yd, dy: n ? -48 : -50, align: 'left', text: 'decoupled consensus, as presented in Cambridge', size: n ? 10 : 12, color: 'fg', weight: 600, opacity: 0 }));
+    const today = sc.add(Rect({ x: X(0), y: Yt - bh / 2, w: .001, h: bh, color: 'muted', fill: 'muted', width: 0, radius: 2, opacity: 0 }));
+    const tL = sc.add(Label({ x: X(0), y: Yt, dy: -22, align: 'left', text: 'Gasper today: ≈ 16 min on average', size: n ? 10 : 12, color: 'fg-2', weight: 600, opacity: 0 }));
+    sc.play('A square-root time axis from 0 to about 16 minutes.', [lagged(ticks.map(fadeIn), .1)], .9);
+    sc.play('Today a transaction waits about 960 s on average for finality.', [fadeIn([today, tL]), to(today, { w: X(960) - X(0) })], 1.4);
+    const say = ['Under decoupled consensus it is included after 6 s.', 'A lock confirms it 12 s later, at 18 s.', 'It waits 54 s for the next finality round to start, at 1 min 12 s.', 'That round justifies it at 2 min 24 s.', 'A second quorum finalizes it at 3 min 48 s, about a quarter of today\'s wait.'];
+    stages.forEach((st, i) => sc.play(say[i], [fadeIn([segs[i], labs[i]]), i === 0 ? fadeIn(dcL) : []], i < 2 ? .8 : 1));
+  });
+})();
+
+/* ================= Figure 17: one-round finality trade-off ================= */
+(() => {
+  const fig = $('#fig-1rf'), canvas = $('canvas', fig), out = $('.readout', fig);
+  let q = .8;
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, L = narrow ? 44 : 60, R = w - 20, T = 30, B = h - 44;
+    const px = p => L + p / .5 * (R - L), py = t => B - t / .5 * (B - T);
+    font(ctx, 11, 'mono'); ctx.fillStyle = tok('muted');
+    for (let v = 0; v <= .5; v += .1) { ctx.strokeStyle = tok('grid'); ctx.beginPath(); ctx.moveTo(L, py(v)); ctx.lineTo(R, py(v)); ctx.stroke(); ctx.beginPath(); ctx.moveTo(px(v), T); ctx.lineTo(px(v), B); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(`${Math.round(v * 100)}%`, L - 5, py(v)); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(`${Math.round(v * 100)}%`, px(v), B + 4); }
+    font(ctx, 11, 'sans'); ctx.textAlign = 'center'; ctx.fillText('offline tolerated p (liveness)', (L + R) / 2, B + 20); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText('Byzantine tolerated t (safety)', L, T - 8);
+    // The region 2t + 3p < 1.
+    ctx.fillStyle = tok('green'); ctx.globalAlpha = .12; ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(0), py(.5)); ctx.lineTo(px(1 / 3), py(0)); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = tok('green'); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(px(0), py(.5)); ctx.lineTo(px(1 / 3), py(0)); ctx.stroke();
+    font(ctx, 11, 'sans', 600); ctx.fillStyle = tok('green'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText('2t + 3p = 1: one-round finality', px(.12) + 8, py(.32));
+    ctx.fillStyle = tok('purple'); ctx.beginPath(); ctx.arc(px(1 / 3), py(1 / 3), 6, 0, 2 * Math.PI); ctx.fill(); ctx.fillText('FFG, two rounds: 33% / 33%', px(1 / 3) + 9, py(1 / 3) - 3);
+    ctx.strokeStyle = tok('red'); ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L, py(.17)); ctx.lineTo(R, py(.17)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = tok('red'); ctx.textAlign = 'right'; ctx.fillText('17%: a large staker could plausibly hold this', R, py(.17) - 4);
+    const p = 1 - q, t = Math.max(0, (1 - 3 * p) / 2);
+    ctx.fillStyle = tok('yellow'); ctx.beginPath(); ctx.arc(px(p), py(t), 7, 0, 2 * Math.PI); ctx.fill();
+    out.textContent = `finalize at ${Math.round(q * 100)}% of votes: tolerates ${Math.round(t * 100)}% Byzantine and ${Math.round(p * 100)}% offline`;
+  });
+  range($('#rf-q'), v => { q = v / 100; paint(); });
+})();
+
+/* ================= Figure 18: post-quantum aggregation ================= */
+(() => {
+  const fig = $('#fig-pqagg'), canvas = $('canvas', fig), out = $('.readout', fig);
+  let V = 8192, S = 8;
+  // Two layers: subnet aggregators download and aggregate signatures, then one node merges the subnet proofs.
+  const model = () => { const bw = 50e6 / 8, sig = 3072, snark = 128 * 1024, need = Math.ceil(V / S);
+    const l1 = [need * sig / bw, need / 1000], l2 = [S * snark / bw, S / 10]; return { l1, l2, total: l1[0] + l1[1] + l2[0] + l2[1] }; };
+  const paint = canvasFig(canvas, ({ ctx, w, h }) => {
+    const narrow = w < 560, m = model(), top = narrow ? 18 : 36, treeH = narrow ? h * .38 : h - 90, tw = narrow ? w - 32 : w * .42;
+    // Tree: validators row, S aggregators, root.
+    const vy = top + treeH, ay = top + treeH * .5, ry = top + 10, cx = 16 + tw / 2, shown = Math.min(S, 16);
+    for (let i = 0; i < shown; i++) { const ax = 16 + (i + .5) * tw / shown;
+      ctx.strokeStyle = tok('rule'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(cx, ry); ctx.stroke();
+      for (let k = 0; k < 4; k++) { const vx = ax + (k - 1.5) * Math.min(6, tw / shown / 5); ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(ax, ay); ctx.stroke(); ctx.fillStyle = tok('purple'); ctx.beginPath(); ctx.arc(vx, vy, 2.2, 0, 2 * Math.PI); ctx.fill(); }
+      ctx.fillStyle = tok('orange'); ctx.beginPath(); ctx.arc(ax, ay, 4.5, 0, 2 * Math.PI); ctx.fill(); }
+    ctx.fillStyle = tok('blue'); ctx.beginPath(); ctx.arc(cx, ry, 6, 0, 2 * Math.PI); ctx.fill();
+    font(ctx, 11, 'sans', 600); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = tok('purple'); ctx.fillText(`${V.toLocaleString('en-US')} signatures`, 16, vy + 14); ctx.fillStyle = tok('orange'); ctx.fillText(`${S} subnet proofs${S > shown ? ` (${shown} drawn)` : ''}`, 16, ay - 14); ctx.fillStyle = tok('blue'); ctx.fillText('one proof', cx + 10, ry);
+    // Bars.
+    const bx = narrow ? 16 : w * .5, bw = narrow ? w - 32 : w * .46, by = narrow ? vy + 44 : top + 20, max = Math.max(4, m.total * 1.1);
+    const rows = [['layer 1: download signatures', m.l1[0], 'muted'], ['layer 1: aggregate them', m.l1[1], 'purple'], ['layer 2: download proofs', m.l2[0], 'muted'], ['layer 2: merge proofs', m.l2[1], 'orange']];
+    rows.forEach(([lab, v, c], i) => { const y = by + i * 40; font(ctx, 11.5, 'sans', 500); ctx.fillStyle = tok('fg-2'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(lab, bx, y + 12);
+      ctx.fillStyle = tok(c); ctx.fillRect(bx, y + 16, Math.max(2, v / max * bw * .8), 14); font(ctx, 11, 'mono', 600); ctx.fillStyle = tok('fg'); ctx.textBaseline = 'middle'; ctx.fillText(`${v.toFixed(2)} s`, bx + v / max * bw * .8 + 6, y + 23); });
+    out.textContent = `${V.toLocaleString('en-US')} validators over ${S} subnets: ${m.total.toFixed(2)} s in two layers`;
+  });
+  range($('#pq-v'), v => { V = 2 ** v; paint(); }, v => (2 ** v).toLocaleString('en-US'));
+  range($('#pq-s'), v => { S = 2 ** v; paint(); }, v => 2 ** v);
+})();
+
+/* ================= Figure 19: road ahead and open issues ================= */
+(() => {
+  const svg = $('#fig-road svg'), el = svgKit(svg);
+  const forks = [['I*', 'decoupled consensus', 'yellow'], ['J*', 'post-quantum heartbeat', 'teal'], ['K*', 'leanXMSS PQ attestations', 'purple'], ['L*', 'one-round finality', 'blue']];
+  el('line', { x1: 30, y1: 60, x2: 870, y2: 60 }, { stroke: 'var(--muted)', strokeWidth: 2 });
+  forks.forEach(([f, t, c], i) => { const x = 110 + i * 210;
+    el('circle', { cx: x, cy: 60, r: 9 }, { fill: `var(--${c})` });
+    el('text', { x, y: 36, 'text-anchor': 'middle' }, { font: '700 15px var(--sans)', fill: 'var(--fg)' }, `${f} fork`);
+    el('text', { x, y: 88, 'text-anchor': 'middle' }, { font: '500 12.5px var(--sans)', fill: `var(--${c})` }, t); });
+  el('text', { x: 30, y: 124 }, { font: '700 13px var(--sans)', fill: 'var(--fg)' }, 'Open issues on the workshop flipchart');
+  const issues = ['Goldilocks: the one? lock length (16 slots?), fast lock > 50%', 'Does the 4× speedup hold?', 'Specs in Python', 'VRF committee selection: yes', 'Committee size 512?', 'No penalties? (I* headliner → EIP)', 'Core-dev and academic review', 'Networking: prioritization, staggering', 'Transition: decouple from slot', 'I* fork timeline, sketched to March 2028'];
+  issues.forEach((t, i) => { const col = i < 5 ? 0 : 1, y = 152 + (i % 5) * 40, x = 30 + col * 470;
+    el('circle', { cx: x + 10, cy: y - 4, r: 11 }, { fill: 'var(--bg-3)', stroke: 'var(--rule)' });
+    el('text', { x: x + 10, y: y, 'text-anchor': 'middle' }, { font: '600 11px var(--mono)', fill: 'var(--fg-2)' }, i + 1);
+    el('text', { x: x + 30, y }, { font: '400 12.5px var(--sans)', fill: 'var(--fg-2)' }, t); });
+})();
+
+</script>
+</html>
