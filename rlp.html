@@ -1,0 +1,1528 @@
+<title>Recursive Length Prefix</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script>
+  // MathJax: SVG output needs no font files, so it works under the artifact CSP.
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'local' },   // local: each SVG carries its glyphs, so Tex() can draw it into a canvas
+    options: { skipHtmlTags: ['script', 'style', 'textarea', 'svg', 'canvas'] }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js"></script>
+<style>
+/* Layout: one reading column (~66ch); figures break out to a wider band; sticky contents rail on wide screens.
+   Dark-first "slate" ground, light "paper" variant. Semantic hues keep ONE meaning across the whole page. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --bg-2: #151a22;        /* figure stage, callouts */
+  --bg-3: #1d2330;        /* controls, hover */
+  --fg: #e7e9ef;
+  --fg-2: #b4bccb;        /* secondary text */
+  --muted: #7d8699;       /* captions, axis labels */
+  --rule: #273042;
+  --grid: #1f2633;        /* faint grid lines in figures */
+  --blue: #58c4dd;
+  --teal: #5cd0b3;
+  --green: #83c167;
+  --yellow: #f2d45c;
+  --orange: #ff9b54;
+  --red: #fc6255;
+  --purple: #b48ee8;
+  --focus: #f2d45c;
+  --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --col: 41rem;           /* reading measure */
+  --wide: 62rem;          /* figure band */
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+    --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+    --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+    --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+  --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+  --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+  --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 1.125rem/1.68 var(--serif);
+  font-optical-sizing: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 6rem;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+
+/* ---------- page frame ---------- */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.page > * { width: 100%; max-width: var(--col); min-width: 0; }
+.page > .wide { max-width: var(--wide); }
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 3px; width: 0; background: var(--blue); z-index: 11; }
+
+/* contents rail (wide screens only) */
+.toc { display: none; }
+@media (min-width: 1280px) {
+  .toc { display: block; position: fixed; top: calc(5rem + env(safe-area-inset-top, 0px)); left: max(24px, calc((100vw - var(--wide)) / 2 - 15rem)); width: 13rem;
+         font: 500 .8rem/1.4 var(--sans); }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; counter-reset: s; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding-left: .7rem; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--fg); }
+  .toc a[aria-current="true"] { color: var(--fg); border-left-color: var(--blue); }
+}
+
+/* ---------- type ---------- */
+header.hero { padding-block: 4.5rem 1.5rem; }
+.kicker { font: 600 .78rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin: 0 0 1rem; }
+h1 { font: 700 clamp(2.3rem, 6vw, 3.6rem)/1.06 var(--serif); letter-spacing: -.015em; margin: 0 0 1rem; text-wrap: balance; }
+.lede { font-size: 1.3rem; line-height: 1.55; color: var(--fg-2); margin: 0; text-wrap: pretty; }
+h2 { font: 700 1.9rem/1.15 var(--serif); letter-spacing: -.01em; margin: 4.5rem 0 1rem; text-wrap: balance; scroll-margin-top: 2rem; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: .5rem; }
+h3 { font: 600 1.25rem/1.3 var(--serif); margin: 2.4rem 0 .6rem; text-wrap: balance; }
+p { margin: 0 0 1.1rem; text-wrap: pretty; }
+a { color: var(--blue); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+code, kbd { font: 400 .88em/1 var(--mono); background: var(--bg-3); padding: .12em .35em; border-radius: 4px; }
+dfn { font-style: normal; font-weight: 600; }
+.mjx-display, mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding-block: .25rem; }
+
+/* semantic colour classes: the same hue means the same object in prose, math and figures */
+.c-blue { color: var(--blue); } .c-teal { color: var(--teal); } .c-green { color: var(--green); }
+.c-yellow { color: var(--yellow); } .c-orange { color: var(--orange); } .c-red { color: var(--red); } .c-purple { color: var(--purple); }
+
+/* ---------- prerequisites box ---------- */
+.prereq { font: 400 .95rem/1.55 var(--sans); color: var(--fg-2); border-block: 1px solid var(--rule); padding-block: 1rem; margin-block: 2rem; display: grid; gap: .4rem; }
+.prereq b { color: var(--fg); font-weight: 600; }
+
+/* ---------- textbook environments ---------- */
+.env { margin-block: 1.6rem; padding: 1rem 1.2rem; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; }
+.env > .env-head { font: 600 .78rem/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .6rem; color: var(--muted); }
+.env > :last-child { margin-bottom: 0; }
+.env.def > .env-head { color: var(--blue); }
+.env.thm > .env-head { color: var(--purple); }
+.env.ex  > .env-head { color: var(--green); }
+.env.warn > .env-head { color: var(--red); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: .5rem; }
+.steps > li::before { content: "Step " counter(st); font: 600 .78rem/2.1 var(--sans); color: var(--muted); }
+
+details.check { margin-block: 1.6rem; border: 1px dashed var(--rule); border-radius: 8px; padding: .9rem 1.2rem; }
+details.check > summary { cursor: pointer; font: 600 .95rem/1.4 var(--sans); list-style: none; }
+details.check > summary::before { content: "Check yourself · "; color: var(--yellow); }
+details.check[open] > summary { margin-bottom: .7rem; }
+details.check .answer { border-top: 1px solid var(--rule); padding-top: .7rem; }
+
+/* ---------- figures ---------- */
+figure.fig { margin: 2.2rem 0 2.6rem; }
+.fig .stage { position: relative; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.fig canvas, .fig svg.plot { display: block; width: 100%; height: auto; max-width: 100%; touch-action: manipulation; }
+/* Only a figure the reader drags on takes over horizontal touch; vertical swipes still scroll the page. */
+.fig canvas.drag, .fig svg.plot.drag { touch-action: pan-y; }
+.fig .try { position: absolute; top: .7rem; left: .9rem; font: 500 .78rem/1.3 var(--sans); color: var(--muted); pointer-events: none; }
+.fig .readout { position: absolute; top: .7rem; right: .9rem; font: 500 .85rem/1.45 var(--mono); color: var(--fg-2); text-align: right; font-variant-numeric: tabular-nums; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.2rem; padding: .8rem .2rem 0; font: 500 .85rem/1.2 var(--sans); color: var(--fg-2); }
+.controls label { display: inline-flex; align-items: center; gap: .6rem; }
+.controls output { font-family: var(--mono); color: var(--fg); min-width: 2.5ch; font-variant-numeric: tabular-nums; }
+.btn { font: 600 .82rem/1 var(--sans); color: var(--fg); background: var(--bg-3); border: 1px solid var(--rule); border-radius: 6px; padding: .55rem .8rem; cursor: pointer; min-height: 36px; }
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; }
+input[type="range"] { accent-color: var(--blue); width: 9rem; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.step-label { flex-basis: 100%; font: 400 1rem/1.5 var(--serif); color: var(--fg); min-height: 3em; }
+.step-log { flex-basis: 100%; list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; counter-reset: st; font: 400 .95rem/1.45 var(--serif); }
+.step-log li { counter-increment: st; display: grid; grid-template-columns: 2rem minmax(0, 1fr); padding: .2rem .6rem .2rem 0; color: var(--muted); border-left: 3px solid transparent; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+.step-log li::before { content: counter(st); font: 600 .74rem/1.95 var(--sans); text-align: right; padding-right: .6rem; }
+.step-log li:hover { color: var(--fg-2); }
+.step-log li.now { color: var(--fg); background: var(--bg-3); border-left-color: var(--yellow); }
+.step-log li.now::before { color: var(--yellow); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+input.scrub { flex: 1 1 10rem; width: auto; min-width: 8rem; accent-color: var(--yellow); }
+[data-focus] { cursor: help; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 4px; border-radius: 3px; }
+[data-focus]:hover, [data-focus]:focus-visible { background: var(--bg-3); }
+figcaption { font: 400 .92rem/1.55 var(--sans); color: var(--fg-2); margin-top: .8rem; max-width: var(--col); }
+figcaption b { color: var(--fg); font-weight: 600; }
+.svg-text { font: 500 13px var(--sans); fill: currentColor; }
+svg.micro { display: inline-block; vertical-align: middle; height: 1.5em; width: auto; margin-inline: .1em; overflow: visible; }
+
+footer.refs { margin-top: 5rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; font: 400 .95rem/1.6 var(--sans); color: var(--fg-2); }
+footer.refs ol { padding-left: 1.2rem; }
+
+@media (max-width: 560px) {
+  body { font-size: 1.05rem; }
+  .step-log { font-size: .9rem; }
+  h2 { font-size: 1.55rem; margin-top: 3.5rem; }
+  .env { padding: .9rem 1rem; }
+  .fig .readout { position: static; padding: .4rem .7rem 0; text-align: left; }
+  .fig .try { position: static; display: block; padding: .6rem .7rem 0; }
+}
+
+/* ---------- RLP page: byte chips, cards, ruler, decoder ---------- */
+.chip { --c: var(--muted); display: inline-block; font: 500 .84rem/1 var(--mono); padding: .32em .42em; margin: .12em .08em; border: 1.5px solid var(--c);
+        border-radius: 5px; background: color-mix(in srgb, var(--c) 18%, var(--bg-2)); color: var(--fg); font-variant-numeric: tabular-nums; }
+.chip.r-pay { --c: var(--yellow); } .chip.r-sp { --c: var(--orange); } .chip.r-lp { --c: var(--blue); } .chip.r-len { --c: var(--purple); }
+.chip.r-bad { --c: var(--red); } .chip.r-ok { --c: var(--green); } .chip.r-more { --c: var(--rule); color: var(--muted); }
+.chips { line-height: 1.9; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); gap: .8rem; padding: 1rem; }
+.card { background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: .8rem .9rem; font: 400 .9rem/1.45 var(--sans); color: var(--fg-2); min-width: 0; }
+.card h4 { margin: 0 0 .45rem; font: 600 .95rem/1.3 var(--sans); color: var(--fg); }
+.card .row { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .3rem; margin: .25rem 0; }
+.card .lab { font: 600 .72rem/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); min-width: 4.6rem; }
+.card svg { display: block; width: 7.5rem; height: auto; margin: .2rem 0 .4rem; }
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; padding: .8rem 1rem 0; font: 500 .82rem/1.3 var(--sans); color: var(--fg-2); }
+.legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.legend i { width: .95rem; height: .95rem; border-radius: 3px; border: 1.5px solid var(--c); background: color-mix(in srgb, var(--c) 22%, var(--bg-2)); }
+.legend i.long { box-shadow: inset 0 -4px 0 var(--purple); }
+#ruler-svg { display: block; width: 100%; max-width: 36rem; height: auto; margin: 0 auto; padding: 1rem; touch-action: manipulation; }
+#ruler-svg text { font: 500 12px var(--mono); fill: var(--fg); pointer-events: none; }
+#ruler-svg rect.cell { cursor: pointer; }
+.panel-out { padding: .9rem 1rem 1rem; font: 400 .95rem/1.55 var(--sans); color: var(--fg-2); border-top: 1px solid var(--rule); min-height: 4.4rem; }
+.panel-out b { color: var(--fg); }
+.tool-in { display: flex; flex-wrap: wrap; gap: .5rem; padding: 1rem 1rem .6rem; align-items: center; }
+.tool-in input[type="text"] { flex: 1 1 14rem; min-width: 0; font: 400 .95rem/1.3 var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: .55rem .7rem; }
+.presets { display: flex; flex-wrap: wrap; gap: .4rem; padding: 0 1rem .8rem; }
+.presets .btn { font-size: .76rem; padding: .45rem .6rem; min-height: 32px; }
+.tree-out { font: 500 .95rem/1.9 var(--mono); overflow-wrap: anywhere; }
+.tree-out .l { color: var(--blue); font-weight: 600; } .tree-out .s { color: var(--yellow); }
+.verdict-ok { color: var(--green); font-weight: 600; } .verdict-bad { color: var(--red); font-weight: 600; }
+.scrollx { overflow-x: auto; }
+table.lens { border-collapse: collapse; width: 100%; font: 400 .9rem/1.4 var(--sans); color: var(--fg-2); }
+table.lens th { text-align: left; font: 600 .72rem/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: .9rem .8rem .5rem; }
+table.lens td { padding: .3rem .8rem; border-top: 1px solid var(--rule); white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.lens td.n { font-family: var(--mono); color: var(--fg); text-align: right; }
+@media (max-width: 560px) { #ruler-svg text { display: none; } #ruler-svg { padding: .6rem; } .cards { padding: .7rem; } }
+</style>
+
+<div class="progress" aria-hidden="true"></div>
+<nav class="toc" aria-label="Contents"><ol></ol></nav>
+
+<main class="page">
+  <header class="hero">
+    <p class="kicker">Ethereum serialization from zero</p>
+    <h1>Recursive Length Prefix</h1>
+    <p class="lede">How Ethereum writes a tree of byte strings as one flat run of bytes, and why exactly one run of bytes decodes back to each tree.</p>
+  </header>
+
+  <div class="prereq">
+    <div><b>You need:</b> bytes written in hexadecimal (<code>0x83</code> is 131), and the idea of a list.</div>
+    <div><b>You will build:</b> RLP encoding and decoding by hand, and the five near-miss encodings a correct decoder must reject.</div>
+  </div>
+
+  <section>
+    <h2 id="problem"><span class="num">1</span>Flattening loses the shape</h2>
+    <p>A transaction, a block header and a network message are each a list. Some fields are byte strings, and some fields are lists themselves. To hash such an object or send it over a wire, a client must turn it into one flat sequence of bytes. Another client must then recover the same object from those bytes.</p>
+    <p>The obvious attempt writes the bytes of every string one after the other. Figure 1 tries it on two different trees and gets the same four bytes from both. Once the brackets are gone, no decoder can tell which tree it was given.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-open" aria-labelledby="cap-open">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.25" role="img" aria-label="Two different trees flatten to the same four bytes 01 02 03 ff. With RLP prefixes they become c9 c5 83 01 02 03 c0 81 ff 80 and c6 82 01 02 82 03 ff."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-open"><b>Figure 1.</b> Writing only the leaf bytes maps two different trees to <span class="c-red">01 02 03 ff</span>. RLP puts a prefix byte in front of every <span class="c-orange">string</span> and every <span class="c-blue">list</span>, and the two trees get different encodings.</figcaption>
+  </figure>
+
+  <section>
+    <p>RLP, short for Recursive Length Prefix, is the repair. Before each piece it writes what kind of piece it is and how many bytes it covers. The left tree in Figure 1 becomes ten bytes. This tree runs through the whole page, so its ten bytes are worth a first look now. By the end of Section 5 you will produce them yourself.</p>
+  </section>
+
+  <section>
+    <h2 id="items"><span class="num">2</span>What RLP encodes</h2>
+    <p>RLP knows two kinds of object, and nothing else. It has no integers, no text and no field names. Those belong to the protocol that uses RLP.</p>
+    <div class="env def">
+      <p class="env-head">Definition 1 (item)</p>
+      <p>An <dfn>item</dfn> is either a <dfn class="c-yellow">string</dfn>, which is a finite sequence of bytes, or a <dfn class="c-blue">list</dfn>, which is a finite sequence of items.</p>
+      <p>This page writes a string as <span class="c-yellow">[01 02 03]</span> and a list as <span class="c-blue">⟨ … ⟩</span>, the notation of Coglio's paper.</p>
+    </div>
+    <p>"String" here means bytes, as in the Yellow Paper and on ethereum.org. It is not text. The definition is recursive, because a list contains items and an item can be a list. That recursion is the R in RLP. Figure 2 shows the three smallest cases. The empty string, the empty list, and a list that holds the empty string are three different items with three different encodings.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-items" aria-labelledby="cap-items">
+    <div class="stage">
+      <div class="cards">
+        <div class="card"><h4>The empty string</h4>
+          <svg viewBox="0 0 120 40" role="img" aria-label="a string box with no bytes"><rect x="30" y="6" width="60" height="28" rx="6" style="fill:color-mix(in srgb,var(--yellow) 20%,var(--bg-2));stroke:var(--yellow)" stroke-width="2"/><text x="60" y="25" text-anchor="middle" style="fill:var(--fg);font:500 15px var(--mono)">[ ]</text></svg>
+          <div class="row"><span class="lab">encoding</span><span class="chip r-sp">80</span></div>
+          <div>No bytes. The prefix says "string of length 0".</div></div>
+        <div class="card"><h4>The empty list</h4>
+          <svg viewBox="0 0 120 40" role="img" aria-label="a list node with no children"><circle cx="60" cy="20" r="15" style="fill:color-mix(in srgb,var(--blue) 20%,var(--bg-2));stroke:var(--blue)" stroke-width="2"/><text x="60" y="25" text-anchor="middle" style="fill:var(--blue);font:600 13px var(--mono)">⟨⟩</text></svg>
+          <div class="row"><span class="lab">encoding</span><span class="chip r-lp">c0</span></div>
+          <div>No items. The prefix says "list whose payload has length 0".</div></div>
+        <div class="card"><h4>A list holding the empty string</h4>
+          <svg viewBox="0 0 120 64" role="img" aria-label="a list node with one child, the empty string"><line x1="60" y1="18" x2="60" y2="40" style="stroke:var(--muted)" stroke-width="1.5"/><circle cx="60" cy="16" r="13" style="fill:color-mix(in srgb,var(--blue) 20%,var(--bg-2));stroke:var(--blue)" stroke-width="2"/><text x="60" y="20.5" text-anchor="middle" style="fill:var(--blue);font:600 12px var(--mono)">⟨⟩</text><rect x="36" y="38" width="48" height="24" rx="6" style="fill:color-mix(in srgb,var(--yellow) 20%,var(--bg-2));stroke:var(--yellow)" stroke-width="2"/><text x="60" y="55" text-anchor="middle" style="fill:var(--fg);font:500 14px var(--mono)">[ ]</text></svg>
+          <div class="row"><span class="lab">encoding</span><span class="chip r-lp">c1</span><span class="chip r-sp">80</span></div>
+          <div>One item. The payload is the one byte <code>80</code>.</div></div>
+      </div>
+    </div>
+    <figcaption id="cap-items"><b>Figure 2.</b> Three different small items. An encoding must keep them apart, so "nothing" has two encodings: <span class="c-orange">80</span> for the empty string and <span class="c-blue">c0</span> for the empty list.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="map"><span class="num">3</span>The first byte is a map</h2>
+    <p>A decoder that has just started reading an item sees one byte. That byte must tell it three things: whether a string or a list follows, how long it is, or where to find the length. RLP splits the 256 possible byte values into five ranges, one per case. Figure 3 colours each value by its range.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-ruler" aria-labelledby="cap-ruler">
+    <div class="stage">
+      <div class="legend">
+        <span><i style="--c:var(--yellow)"></i>00–7f a byte that is its own encoding</span>
+        <span><i style="--c:var(--orange)"></i>80–b7 short string</span>
+        <span><i class="long" style="--c:var(--orange)"></i>b8–bf long string</span>
+        <span><i style="--c:var(--blue)"></i>c0–f7 short list</span>
+        <span><i class="long" style="--c:var(--blue)"></i>f8–ff long list</span>
+      </div>
+      <svg id="ruler-svg" viewBox="0 0 576 576" role="slider" tabindex="0" aria-label="The 256 byte values in a 16 by 16 grid, coloured by what each means as the first byte of an RLP item. Arrow keys move the selection." aria-valuemin="0" aria-valuemax="255" aria-valuenow="131"></svg>
+      <div class="panel-out" id="ruler-out" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-ruler"><b>Figure 3.</b> The meaning of a first byte. Tap or hover a value, or use the arrow keys. A <span class="c-purple">purple stripe</span> marks the two "long" ranges, where the next bytes hold the length.</figcaption>
+  </figure>
+
+  <section>
+    <p>Each range is a whole interval, so a decoder needs only four comparisons to classify a byte. Within a range, the distance from the start of the range is a count. In <code>83</code>, the distance from <code>80</code> is 3, so a string of 3 bytes follows. The next four sections turn each range into a rule.</p>
+
+    <h2 id="strings"><span class="num">4</span>Encoding a string</h2>
+    <p>Start with the string <span class="c-yellow">dog</span>, the bytes <code>64 6f 67</code>. Its length is 3. Figure 4 builds its encoding in four steps.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-dog" aria-labelledby="cap-dog">
+    <div class="stage">
+      <canvas data-aspect="0.36" data-aspect-narrow="0.72" role="img" aria-label="The string dog, bytes 64 6f 67, gets the prefix 0x80 plus 3 = 0x83."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-dog"><b>Figure 4.</b> A string of fewer than 56 bytes is written as one <span class="c-orange">prefix byte</span>, \(\mathtt{0x80}\) plus the length, followed by the <span class="c-yellow">string</span> itself.</figcaption>
+  </figure>
+
+  <section>
+    <p>One case gets a shortcut. A string that is one byte below <code>0x80</code> is written as that byte alone, with no prefix. The byte <code>0f</code> encodes as <code>0f</code>. Single bytes below <code>0x80</code> include every ASCII character, and they are common, so the shortcut saves a byte each time. The decoder can still tell the cases apart, because a byte below <code>0x80</code> never starts any other encoding (Figure 3).</p>
+    <p>Type into Figure 5 to see both cases. Then try a string of 55 characters, and one of 56.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-type" aria-labelledby="cap-type">
+    <div class="stage">
+      <div class="tool-in"><input id="type-in" type="text" value="dog" aria-label="String to encode (UTF-8 bytes)" spellcheck="false" autocomplete="off"></div>
+      <div class="presets" id="type-presets"></div>
+      <div class="panel-out" id="type-out" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-type"><b>Figure 5.</b> The RLP encoding of the UTF-8 bytes you type. A single byte below <code>0x80</code> stands alone. Up to 55 bytes get one <span class="c-orange">prefix</span>. From 56 bytes on, <span class="c-purple">length bytes</span> appear.</figcaption>
+  </figure>
+
+  <section>
+    <h3>Long strings</h3>
+    <p>The short form has a limit. The short-string range <code>80</code>–<code>b7</code> holds 56 values, for lengths 0 to 55. A longer string needs its length written out in bytes. RLP writes the length in base 256, most significant byte first, with no leading zero byte.</p>
+    <div class="env def">
+      <p class="env-head">Definition 2 (big-endian length)</p>
+      <p>For a whole number \(n \ge 1\), \(\class{c-purple}{\mathrm{BE}(n)}\) is the shortest byte sequence \(b_1 \dots b_k\) with \(n = \sum_i b_i \cdot 256^{k-i}\). For example, \(\mathrm{BE}(1024) = \)<span class="chip r-len">04</span><span class="chip r-len">00</span>, because \(1024 = 4 \cdot 256 + 0\). By convention \(\mathrm{BE}(0)\) is the empty sequence.</p>
+    </div>
+    <p>A long string's prefix byte then says how many length bytes follow. Figure 6 does this for a 1024-byte string. Drag the slider to try other lengths.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-long" aria-labelledby="cap-long">
+    <div class="stage">
+      <canvas data-aspect="0.36" data-aspect-narrow="0.8" role="img" aria-label="A 1024-byte string gets the header b9 04 00: prefix 0xb7 plus 2, then the two length bytes 04 00."></canvas>
+      <div class="try">Play, scrub, or step with ← →. Then change the length.</div>
+    </div>
+    <div class="controls"><label>length <input id="long-L" type="range" min="0" max="7" value="3"><output for="long-L">1024</output></label></div>
+    <figcaption id="cap-long"><b>Figure 6.</b> The long form. The <span class="c-orange">prefix</span> is \(\mathtt{0xb7}\) plus the number of <span class="c-purple">length bytes</span>. The length bytes are \(\mathrm{BE}\) of the string's length, and the <span class="c-yellow">string</span> follows.</figcaption>
+  </figure>
+
+  <section>
+    <p>The two forms and the shortcut make up the whole string rule. Here it is in the Yellow Paper's notation. A dot means concatenation, and \(\|x\|\) is the length of \(x\) in bytes.</p>
+    <div class="env def">
+      <p class="env-head">Definition 3 (string encoding, Yellow Paper Appendix B)</p>
+      \[ R_b(\class{c-yellow}{x}) = \begin{cases}
+        \class{c-yellow}{x} & \text{if } \|x\| = 1 \text{ and } x[0] < 128 \\[2pt]
+        \underbrace{\class{c-orange}{(128 + \|x\|)}}_{\text{prefix}} \cdot \class{c-yellow}{x} & \text{else if } \|x\| < 56 \\[2pt]
+        \underbrace{\class{c-orange}{(183 + \|\mathrm{BE}(\|x\|)\|)}}_{\text{prefix}} \cdot \underbrace{\class{c-purple}{\mathrm{BE}(\|x\|)}}_{\text{length}} \cdot \class{c-yellow}{x} & \text{else if } \|x\| < 2^{64}
+      \end{cases} \]
+      <p>A string of \(2^{64}\) bytes or more has no encoding. Section 8 shows where that limit comes from.</p>
+    </div>
+    <p>The constants are the starts of the ranges in Figure 3: \(128 = \mathtt{0x80}\), and \(183 = \mathtt{0xb7}\), one below \(\mathtt{0xb8}\). Table 7 shows the header at each boundary.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-lens" aria-labelledby="cap-lens">
+    <div class="stage scrollx"><table class="lens" id="lens-table"><thead><tr><th>string</th><th>length</th><th>header bytes</th><th>rule</th></tr></thead><tbody></tbody></table></div>
+    <figcaption id="cap-lens"><b>Figure 7.</b> Headers at the boundaries, for strings of the letter <code>a</code> (byte <code>61</code>) and one string <code>[ff]</code>. The header grows by one byte at 56, at 256, and again at 65536.</figcaption>
+  </figure>
+
+  <details class="check">
+    <summary>What is the header of a string of 300 bytes?</summary>
+    <div class="answer"><p>\(300 \ge 56\), so use the long form. \(300 = 1 \cdot 256 + 44\), so \(\mathrm{BE}(300) = \mathtt{01\,2c}\), which is 2 bytes. The prefix is \(\mathtt{0xb7} + 2 = \mathtt{0xb9}\). The header is <span class="chip r-sp">b9</span><span class="chip r-len">01</span><span class="chip r-len">2c</span>. Type 300 characters into Figure 5 to confirm.</p></div>
+  </details>
+
+  <section>
+    <h2 id="lists"><span class="num">5</span>Encoding a list</h2>
+    <p>A list is encoded in two steps. First, encode each item and join the encodings in order. That joined run of bytes is the <dfn>payload</dfn>. Second, put a prefix in front that gives the payload's length. The prefix uses the list ranges of Figure 3. Figure 8 encodes the list <span class="c-blue">⟨<span class="c-yellow">cat</span>, <span class="c-yellow">dog</span>⟩</span>.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-list" aria-labelledby="cap-list">
+    <div class="stage">
+      <canvas data-aspect="0.46" data-aspect-narrow="0.95" role="img" aria-label="The list of cat and dog: each item encodes to 4 bytes, the 8-byte payload gets the list prefix c8."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-list"><b>Figure 8.</b> A list's prefix counts the bytes of its items' encodings, not the number of items. Two items of 4 bytes each make an 8-byte payload, so the prefix is \(\mathtt{0xc0} + 8 = \mathtt{c8}\).</figcaption>
+  </figure>
+
+  <section>
+    <div class="env def">
+      <p class="env-head">Definition 4 (list encoding, Yellow Paper Appendix B)</p>
+      <p>For a list \(x = \langle x_1, \dots, x_n \rangle\), let the payload be \(s(x) = \mathrm{RLP}(x_1) \cdot \ldots \cdot \mathrm{RLP}(x_n)\). Then</p>
+      \[ R_l(x) = \begin{cases}
+        \class{c-blue}{(192 + \|s(x)\|)} \cdot s(x) & \text{if } \|s(x)\| < 56 \\[2pt]
+        \class{c-blue}{(247 + \|\mathrm{BE}(\|s(x)\|)\|)} \cdot \class{c-purple}{\mathrm{BE}(\|s(x)\|)} \cdot s(x) & \text{else if } \|s(x)\| < 2^{64}
+      \end{cases} \]
+      <p>\(\mathrm{RLP}(x)\) is \(R_b(x)\) when \(x\) is a string and \(R_l(x)\) when \(x\) is a list. A list fails to encode if any item fails.</p>
+    </div>
+    <p>The list rule mirrors the string rule, with 192 (<code>0xc0</code>) and 247 (<code>0xf7</code>) in place of 128 and 183. It has no single-byte shortcut, because a list always has a prefix.</p>
+    <p>The definition calls itself: to encode a list you first encode its items. So encoding runs from the leaves up. Figure 9 encodes the running tree this way and draws a bracket over each payload.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-core" aria-labelledby="cap-core">
+    <div class="stage">
+      <canvas data-aspect="0.62" data-aspect-narrow="1.15" role="img" aria-label="The tree list of (list of [01 02 03] and the empty list), [ff], and the empty string, encoded leaf first into c9 c5 83 01 02 03 c0 81 ff 80, with a bracket over each payload."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-core"><b>Figure 9.</b> The running tree, encoded from the leaves up. Each prefix's bracket covers exactly the payload it counts, and the brackets nest the way the tree does. Hover <span class="c-blue" data-focus="fig-core:outer" tabindex="0">outer list</span>, <span class="c-blue" data-focus="fig-core:inner" tabindex="0">inner list</span> or <span class="c-yellow" data-focus="fig-core:l123" tabindex="0">[01 02 03]</span> to isolate one item.</figcaption>
+  </figure>
+
+  <section>
+    <p>Figure 9 is the whole idea of RLP in one picture. Every prefix states how far its item reaches. A list's bracket contains its items' brackets, and they never partly overlap. The tree is still in the bytes, as nested intervals.</p>
+    <div class="env ex">
+      <p class="env-head">Example 1 (the running tree)</p>
+      <ol class="steps">
+        <li><span><span class="c-yellow">[01 02 03]</span> has 3 bytes: \(\mathtt{0x80} + 3 = \mathtt{83}\), giving <code>83 01 02 03</code>.</span></li>
+        <li><span>The empty list has an empty payload: \(\mathtt{0xc0} + 0 = \mathtt{c0}\).</span></li>
+        <li><span>The inner list's payload is <code>83 01 02 03 c0</code>, 5 bytes: \(\mathtt{0xc0} + 5 = \mathtt{c5}\).</span></li>
+        <li><span><span class="c-yellow">[ff]</span> is one byte, but \(\mathtt{ff} \ge \mathtt{0x80}\), so the shortcut does not apply: <code>81 ff</code>.</span></li>
+        <li><span>The empty string is <code>80</code>.</span></li>
+        <li><span>The outer payload is \(6 + 2 + 1 = 9\) bytes: \(\mathtt{0xc0} + 9 = \mathtt{c9}\). The result is <code>c9 c5 83 01 02 03 c0 81 ff 80</code>.</span></li>
+      </ol>
+      <p>Check: this matches Figure 1 in Coglio's paper, which gives the bytes in decimal as 201, 197, 131, 1, 2, 3, 192, 129, 255, 128.</p>
+    </div>
+    <details class="check">
+      <summary>Encode ⟨ ⟨⟩, ⟨⟨⟩⟩, ⟨ ⟨⟩, ⟨⟨⟩⟩ ⟩ ⟩.</summary>
+      <div class="answer"><p>From the leaves up: \(\langle\rangle \to\) <code>c0</code>. \(\langle\langle\rangle\rangle \to\) <code>c1 c0</code>. \(\langle\langle\rangle, \langle\langle\rangle\rangle\rangle\) has payload <code>c0 c1 c0</code>, 3 bytes, so it is <code>c3 c0 c1 c0</code>. The outer payload is <code>c0</code>, <code>c1 c0</code>, <code>c3 c0 c1 c0</code>, which is \(1 + 2 + 4 = 7\) bytes. The answer is <code>c7 c0 c1 c0 c3 c0 c1 c0</code>, the "set-theoretic three" on ethereum.org. Paste it into Figure 12 to see the tree.</p></div>
+    </details>
+  </section>
+
+  <section>
+    <h2 id="ints"><span class="num">6</span>Integers are strings</h2>
+    <p>RLP has no integer type. Ethereum encodes a nonce, a balance or a gas limit by first turning the number into a string with \(\mathrm{BE}\) (Definition 2), then encoding that string. Zero becomes the empty string, so the integer 0 encodes as <code>80</code>. Figure 10 shows a handful.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-int" aria-labelledby="cap-int">
+    <div class="stage"><div class="cards" id="int-cards"></div></div>
+    <figcaption id="cap-int"><b>Figure 10.</b> Integers through \(\mathrm{BE}\), then \(R_b\). Values up to 127 are a single byte with no prefix. At 128 a prefix appears. The integer 0 is <span class="c-orange">80</span>, which is not the byte string <span class="c-yellow">00</span>.</figcaption>
+  </figure>
+
+  <section>
+    <p>The last card in Figure 10 is a trap. The string <code>00 04 00</code> is a valid RLP string. Read as an integer, it has a leading zero. ethereum.org states that a protocol reading integers must treat leading zeros as invalid. So the check happens one layer above RLP, when a field is interpreted as a number.</p>
+
+    <h2 id="decode"><span class="num">7</span>Decoding: read a byte, then jump</h2>
+    <p>A decoder reverses Figure 9 from the left. It reads one prefix, looks it up in Figure 3, and learns the kind and the extent of the next item. A string's bytes are copied without being read as prefixes. A list's payload is decoded the same way, item by item, until its length is used up. Figure 11 runs this on the running example.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-decode" aria-labelledby="cap-decode">
+    <div class="stage">
+      <canvas data-aspect="0.62" data-aspect-narrow="1.15" role="img" aria-label="A cursor reads c9, c5, 83, c0, 81, 80 in turn, and the tree is rebuilt from the root down."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-decode"><b>Figure 11.</b> Decoding reads only the prefix bytes (six of the ten here) and jumps over string content. The tree comes back from the root down, which is the reverse of the leaf-first order of Figure 9.</figcaption>
+  </figure>
+
+  <section>
+    <p>Decoding can also fail. A prefix may promise more bytes than remain. An item may cross the end of its list. Bytes may be left over after the top item. Figure 12 is a full decoder. Paste any hex, or pick a preset.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-try" aria-labelledby="cap-try">
+    <div class="stage">
+      <div class="tool-in"><input id="dec-in" type="text" value="c9 c5 83 01 02 03 c0 81 ff 80" aria-label="Hex bytes to decode" spellcheck="false" autocomplete="off"></div>
+      <div class="presets" id="dec-presets"></div>
+      <div class="panel-out" id="dec-out" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-try"><b>Figure 12.</b> A strict RLP decoder. It returns the tree, with <span class="c-blue">lists</span> as ⟨ ⟩ and <span class="c-yellow">strings</span> as [ ], or names the first rule the input breaks and the byte where it breaks it.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="canonical"><span class="num">8</span>One item, one encoding</h2>
+    <p>Look at the decoder's presets marked "near miss". Each has a prefix and a length that point at real bytes. A careless decoder would accept them. Coglio found five such forms (2020, §4.2.1) while proving his decoder correct in the ACL2 theorem prover. A correct decoder must reject all five. Figure 13 lists them.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-quasi" aria-labelledby="cap-quasi">
+    <div class="stage"><div class="cards" id="quasi-cards"></div></div>
+    <figcaption id="cap-quasi"><b>Figure 13.</b> The five near-miss encodings (Coglio 2020, §4.2.1). Each one <span class="c-red">"could"</span> mean an item that already has a shorter, <span class="c-green">canonical</span> encoding. The canonical encoding is the only one the encoder ever produces.</figcaption>
+  </figure>
+
+  <section>
+    <p>Why reject bytes whose meaning is plain? Because Ethereum hashes RLP bytes. The Yellow Paper defines a block's hash as the Keccak-256 hash of its RLP-encoded header. If <code>81 05</code> and <code>05</code> both decoded to the same item, that item would have two hashes. Coglio gives a second case: a database keyed by encodings would store one item twice. The encoder never produces these forms. If the decoder accepts only what the encoder produces, then every item has exactly one encoding.</p>
+    <p>Coglio reports that the Python reference decoder on the Ethereum wiki once accepted these forms, and that some client libraries did too. His work led to a fix on the wiki and to tests for all five forms in the shared <code>ethereum/tests</code> suite.</p>
+
+    <h3>Why a decoder never guesses</h3>
+    <p>Two properties make RLP decodable. Coglio proves both in ACL2.</p>
+    <div class="env thm">
+      <p class="env-head">Theorem 1 (Coglio 2020, Fig. 5)</p>
+      <p><b>Injective.</b> If two items have the same encoding, they are the same item.</p>
+      <p><b>Prefix-free.</b> If one valid encoding is a prefix of another valid encoding, the two are equal.</p>
+    </div>
+    <p>The second property is why the decoder in Figure 11 can stop the moment an item is complete, with no end marker. Figure 14 shows the proof idea. The first few bytes of an encoding fix its total length.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-prefix" aria-labelledby="cap-prefix">
+    <div class="stage">
+      <canvas data-aspect="0.34" data-aspect-narrow="0.62" role="img" aria-label="Encoding A is c9 c5 83 01 02 03 c0 81 ff 80. B starts with the same bytes and has two more. The first byte c9 fixes the length at 10, so B's extra bytes are left over."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-prefix"><b>Figure 14.</b> Why no valid encoding extends another. Both start with <span class="c-blue">c9</span>, which fixes the total at \(1 + 9 = 10\) bytes. Bytes after that are not part of the item.</figcaption>
+  </figure>
+
+  <section>
+    <p>In the long forms the length takes a few more bytes to read, but the argument is the same. The prefix gives the number of length bytes, those bytes give the payload length, and the total is fixed before the payload begins. That is also where the \(2^{64}\) limit of Definition 3 comes from. Write \(ll\) for the number of length bytes. Figure 15 counts the prefix values available for \(ll\).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-limit" aria-labelledby="cap-limit">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="0.8" role="img" aria-label="Long string prefixes b8 to bf allow 1 to 8 length bytes. A ninth would need c0, which is the empty list. Long list prefixes f8 to ff allow 1 to 8. A ninth would need 0x100, which is not a byte."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-limit"><b>Figure 15.</b> Eight prefix values per long range allow at most 8 <span class="c-purple">length bytes</span>. So every length is below \(256^8 = 2^{64}\).</figcaption>
+  </figure>
+
+  <section>
+    <p>The arithmetic is direct. Eight length bytes reach at most</p>
+    \[ 256^8 - 1 = 2^{64} - 1 = 18\,446\,744\,073\,709\,551\,615 . \]
+    <p>No real object comes near that limit. It exists so that the five ranges of Figure 3 fit in one byte, with no value left over and no value shared.</p>
+
+    <h2 id="whole"><span class="num">9</span>The whole picture</h2>
+    <p>Figure 16 replays the decoding of the running example against the first-byte map. Each prefix byte lands in its range. The string content bytes are never looked up.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-whole" aria-labelledby="cap-whole">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="The 256 byte values as a coloured strip. Each prefix byte of c9 c5 83 01 02 03 c0 81 ff 80 points to its range."></canvas>
+      <div class="try">Play, scrub, or step with ← →</div>
+    </div>
+    <figcaption id="cap-whole"><b>Figure 16.</b> The ten bytes of the running tree, read against the five ranges. The six <span class="c-blue">list</span> and <span class="c-orange">string</span> prefixes are looked up. The four <span class="c-yellow">content</span> bytes are copied.</figcaption>
+  </figure>
+
+  <section>
+    <h3>What to remember</h3>
+    <p>An RLP item is a string of bytes or a list of items. Nothing else is encoded, and integers become big-endian strings with no leading zero.</p>
+    <p>Every item starts with one byte that names its kind and its length, or the number of bytes that hold its length. A single byte below <code>0x80</code> is its own encoding.</p>
+    <p>A list's length counts the bytes of its encoded items, so the brackets nest and decoding is a left-to-right walk with no lookahead.</p>
+    <p>Every item has exactly one valid encoding. A decoder must reject the five near-miss forms, because Ethereum hashes these bytes.</p>
+  </section>
+
+  <footer class="refs">
+    <p><b>Further reading</b></p>
+    <ol>
+      <li>G. Wood, <a href="https://ethereum.github.io/yellowpaper/paper.pdf">Ethereum: A Secure Decentralised Generalised Transaction Ledger</a> (the Yellow Paper), Appendix B "Recursive Length Prefix". The normative definitions of \(R_b\), \(R_l\) and \(\mathrm{BE}\) used in Definitions 2–4.</li>
+      <li>A. Coglio, <a href="https://arxiv.org/abs/2009.13769">Ethereum's Recursive Length Prefix in ACL2</a>, ACL2 Workshop 2020, EPTCS 327. Figure 1 is the running example. §3.4 proves injectivity and prefix-freeness, §4.2.1 lists the five near-miss encodings, and §4.3 proves the strict parser is the exact inverse of the encoder.</li>
+      <li>ethereum.org, <a href="https://ethereum.org/developers/docs/data-structures-and-encoding/rlp/">Recursive-length prefix (RLP) serialization</a>. The five ranges, Python reference code, and the examples used here (<code>dog</code>, <code>[cat, dog]</code>, the set-theoretic three, the 56-byte and 1024-byte strings).</li>
+      <li><a href="https://github.com/ethereum/tests">ethereum/tests</a>, directory <code>RLPTests</code>. The shared valid and invalid RLP test vectors that every client runs.</li>
+    </ol>
+  </footer>
+</main>
+
+<script>
+/* ================= figure runtime (keep; extend per page) ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const tok = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Every figure registers a redraw so a theme switch repaints canvases with the new tokens.
+const redrawers = new Set();
+const redrawAll = () => redrawers.forEach(f => f());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Hi-DPI canvas that tracks its CSS width; height = width * data-aspect
+// (data-aspect-narrow below 560px, so a figure stays large on a phone).
+function canvasFig(canvas, draw) {
+  const ctx = canvas.getContext('2d');
+  const state = { ctx, w: 0, h: 0 };
+  const paint = () => { ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, state.w, state.h); draw(state); };
+  const resize = () => {
+    const w = canvas.clientWidth; if (!w) return;
+    const aspect = parseFloat((w < 560 && canvas.dataset.aspectNarrow) || canvas.dataset.aspect || '0.6');
+    const h = Math.round(w * aspect);
+    canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * devicePixelRatio); canvas.height = Math.round(h * devicePixelRatio);
+    state.w = w; state.h = h; paint();
+  };
+  new ResizeObserver(resize).observe(canvas);
+  redrawers.add(paint);
+  resize();
+  return paint;
+}
+
+// rAF loop that runs only while its figure is on screen and playing.
+function loop(el, tick) {
+  let on = false, visible = false, last = 0, id = 0;
+  const frame = t => { const dt = Math.min(0.05, (t - last) / 1000 || 0); last = t; if (tick(dt) === false) api.stop(); else id = requestAnimationFrame(frame); };
+  const sync = () => { cancelAnimationFrame(id); if (on && visible) { last = performance.now(); id = requestAnimationFrame(frame); } };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; sync(); }).observe(el);
+  const api = { start() { on = true; sync(); }, stop() { on = false; sync(); el.dispatchEvent(new Event('loopstop')); }, get running() { return on; } };
+  return api;
+}
+
+// Step-through controller: Reset / ← / Play / → buttons, plus keyboard ←/→ when the figure has focus.
+function stepper(fig, { count, render, interval = 900 }) {
+  let i = 0, timer = 0;
+  const btn = a => $(`[data-act="${a}"]`, fig);
+  const play = btn('play');
+  const show = () => {
+    const n = count();
+    i = Math.max(0, Math.min(i, n));
+    render(i, n);
+    btn('prev').disabled = i === 0; btn('next').disabled = i === n;
+  };
+  const stop = () => { clearInterval(timer); timer = 0; play.setAttribute('aria-pressed', 'false'); play.textContent = 'Play'; };
+  const go = d => { i += d; show(); };
+  btn('prev').onclick = () => { stop(); go(-1); };
+  btn('next').onclick = () => { stop(); go(1); };
+  btn('reset').onclick = () => { stop(); i = 0; show(); };
+  play.onclick = () => {
+    if (timer) return stop();
+    if (i >= count()) i = 0;
+    play.setAttribute('aria-pressed', 'true'); play.textContent = 'Pause';
+    if (reducedMotion.matches) { i = count(); show(); return stop(); }
+    show();
+    timer = setInterval(() => { if (i >= count()) return stop(); go(1); }, interval);
+  };
+  fig.addEventListener('keydown', e => {
+    if (e.target.matches('input')) return;
+    if (e.key === 'ArrowRight') { stop(); go(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { stop(); go(-1); e.preventDefault(); }
+  });
+  return { show, reset() { stop(); i = 0; show(); }, get i() { return i; } };
+}
+
+// Range input bound to its <output>.
+function range(input, onInput, fmt = v => v) {
+  const out = input.parentElement.querySelector('output');
+  const upd = () => { if (out) out.textContent = fmt(+input.value); onInput(+input.value); };
+  input.addEventListener('input', upd);
+  upd();
+}
+
+// Draggable SVG element in viewBox coordinates; also arrow-key movable.
+function draggable(svg, el, onMove, step = 10) {
+  const toSvg = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing'; e.preventDefault(); });
+  el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) { const p = toSvg(e); onMove(p.x, p.y); } });
+  el.addEventListener('pointerup', () => { el.style.cursor = 'grab'; });
+  el.addEventListener('keydown', e => {
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (d) { e.preventDefault(); onMove(+el.getAttribute('cx') + d[0], +el.getAttribute('cy') + d[1]); }
+  });
+}
+
+const typeset = el => window.MathJax?.typesetPromise ? MathJax.typesetPromise([el]) : Promise.resolve();
+
+/* ================= Scene: a small Manim-style animation engine =================
+   A scene is a list of objects plus a timeline of property tweens grouped into "beats".
+   The frame at time t is a pure function of t, so the timeline can be scrubbed, replayed,
+   stepped beat by beat and rebuilt when a parameter changes.
+
+     const sc = new Scene('#fig-x', { x: [-1, 10], y: [-1, 6], equal: true }, (sc, P) => {
+       const a = sc.add(Dot({ x: 1, y: 1, color: 'blue', opacity: 0, tag: 'a' }));
+       const l = sc.add(Line({ x1: 1, y1: 1, x2: 5, y2: 3, color: 'yellow', draw: 0 }));
+       sc.play('Place the point a.', [fadeIn(a)]);
+       sc.play('Draw the segment from a.', [create(l)], 1.2);
+       sc.play('Slide a along it.', [to(a, { x: 5, y: 3 })]);
+     });
+
+   World coordinates have y pointing up. Sizes r and width are in CSS pixels; R (circle) is in
+   world units. Colours are token names ('blue', 'muted', 'fg') or literal CSS colours.
+
+   Phones: options may be a function of `narrow` (canvas under 560px), and build() can read
+   sc.narrow to stack the layout vertically. Crossing the breakpoint rebuilds the scene. */
+
+const ease = {
+  smooth: t => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2,
+  linear: t => t,
+  out: t => 1 - (1 - t) ** 3,
+  there: t => Math.sin(Math.PI * t),           // 0 → 1 → 0, for indicate()
+};
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+const colorCache = new Map();
+function rgb(c) {
+  const css = /^(#|rgb|hsl)/.test(c) ? c : tok(c);
+  if (colorCache.has(css)) return colorCache.get(css);
+  const cv = document.createElement('canvas').getContext('2d');
+  cv.fillStyle = '#000'; cv.fillStyle = css;
+  const s = cv.fillStyle;   // normalised to #rrggbb or rgba(...)
+  const v = s[0] === '#' ? [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+  colorCache.set(css, v); return v;
+}
+redrawers.add(() => colorCache.clear());
+const isColor = v => typeof v === 'string' && v !== '' && !/^\d/.test(v);
+function mix(a, b, p) {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * p;
+  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) return a.map((x, i) => mix(x, b[i], p));
+  if (isColor(a) && isColor(b) && a !== b) {
+    if (p <= 0) return a; if (p >= 1) return b;
+    const [x, y] = [rgb(a), rgb(b)];
+    return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * p)).join(',')})`;
+  }
+  return p < 1 ? a : b;   // strings, booleans: switch at the end
+}
+const paintColor = c => (/^(#|rgb|hsl)/.test(c) ? c : tok(c));
+
+class Scene {
+  static all = new Map();
+  constructor(fig, opts, build) {
+    this.fig = typeof fig === 'string' ? $(fig) : fig;
+    this.canvas = $('canvas', this.fig);
+    this.optsIn = opts; this.narrow = this.canvas.clientWidth < 560; this.#layout();
+    this.build = build; this.params = {};
+    this.t = 0; this.playing = false; this.focus = null;
+    this.ctx = this.canvas.getContext('2d');
+    Scene.all.set(this.fig.id, this);
+    if (this.optsIn.controls === false || (typeof opts === 'function' && opts(false).controls === false)) this.#bareControls(); else this.#controls();
+    this.#measure();
+    this.rebuild();
+    new ResizeObserver(() => this.#resize()).observe(this.canvas);
+    new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; if (!this.visible) this.pause(); }).observe(this.fig);
+    redrawers.add(() => this.render());
+    this.#resize();
+  }
+
+  #layout() { this.opts = { x: [0, 10], y: [0, 6], equal: false, pad: 24, rest: 'end', ...(typeof this.optsIn === 'function' ? this.optsIn(this.narrow) : this.optsIn) }; }
+
+  /* ---- building ---- */
+  // New params restart at the resting frame; a plain rebuild (resize, fonts ready) keeps the current time.
+  rebuild(params) {
+    const keep = !params && this.objs;
+    Object.assign(this.params, params);
+    this.objs = []; this.tracks = []; this.beats = []; this.T = 0;
+    this.build(this, this.params);
+    if (!this.beats.length) this.beats.push({ label: '', t0: 0, t1: 0 });
+    this.scrub.max = Math.max(1, Math.round(this.T * 100));
+    this.seek(keep ? this.t : this.opts.rest === 'end' ? this.T : this.opts.rest);
+  }
+  // Rebuild with new params and play the whole (short) timeline: lets an instrument animate a change.
+  animateTo(params) { this.rebuild(params); this.stopAt = this.T; this.playFrom(0); }
+  add(o) { o.opacity ??= 1; o.init = { ...o }; this.objs.push(o); return o; }
+  addAll(list) { return list.map(o => this.add(o)); }
+  play(label, anims, dur = 1, e = ease.smooth) {
+    const t0 = this.T;
+    anims.flat(Infinity).forEach(a => a(this, t0, dur, e));
+    this.beats.push({ label, t0, t1: t0 + dur });
+    this.T += dur;
+  }
+  wait(dur = .6) { this.T += dur; if (this.beats.length) this.beats.at(-1).t1 = this.T; }
+  valueAt(o, prop, t) {
+    let v = o.init[prop];
+    for (const k of this.tracks) if (k.o === o && k.prop === prop && t >= k.t0) v = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return v;
+  }
+  track(o, prop, t0, t1, value) { this.tracks.push({ o, prop, t0, t1, value }); }
+
+  /* ---- coordinates ---- */
+  #resize() {
+    const w = this.canvas.clientWidth; if (!w || w === this.w) return;
+    this.#measure();
+    this.rebuild();      // layouts may depend on sc.narrow and on pixel sizes (texRow), so rebuild at the new size
+  }
+  #measure() {
+    const c = this.canvas, w = c.clientWidth || c.parentElement.clientWidth || 640;
+    if ((w < 560) !== this.narrow) { this.narrow = w < 560; this.#layout(); }
+    const h = Math.round(w * parseFloat((w < 560 && c.dataset.aspectNarrow) || c.dataset.aspect || '0.6'));
+    c.style.height = h + 'px'; c.width = Math.round(w * devicePixelRatio); c.height = Math.round(h * devicePixelRatio);
+    this.w = w; this.h = h;
+    const { x: [x0, x1], y: [y0, y1], pad } = this.opts;
+    let sx = (w - 2 * pad) / (x1 - x0), sy = (h - 2 * pad) / (y1 - y0);
+    if (this.opts.equal) sx = sy = Math.min(sx, sy);
+    this.sx = sx; this.sy = sy;
+    this.ox = (w - sx * (x1 - x0)) / 2 - sx * x0;
+    this.oy = (h + sy * (y1 - y0)) / 2 + sy * y0;
+  }
+  X(x) { return this.ox + this.sx * x; }
+  Y(y) { return this.oy - this.sy * y; }
+
+  /* ---- time ---- */
+  stateAt(t) {
+    const s = new Map(this.objs.map(o => [o, { ...o.init }]));
+    for (const k of this.tracks) if (t >= k.t0) s.get(k.o)[k.prop] = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return s;
+  }
+  // The beat whose interval (t0, t1] holds t. At a boundary the beat that just finished wins, so a scene resting
+  // after beat k shows beat k's label, never the next one's.
+  beatAt(t) { let i = 0; this.beats.forEach((b, k) => { if (t > b.t0 + 1e-6) i = k; }); return i; }
+  seek(t) {
+    this.t = Math.max(0, Math.min(this.T, t));
+    this.scrub.value = Math.round(this.t * 100);
+    this.#showBeat(this.beatAt(this.t));
+    this.render();
+  }
+  // The step log lists every beat already played, numbered, with the current one highlighted,
+  // so the reader keeps the whole story so far in view. Future beats stay hidden.
+  #showBeat(i) {
+    if (this.label.textContent !== this.beats[i].label) this.label.textContent = this.beats[i].label;
+    if (!this.log) return;
+    if (this.logFor !== this.beats) {
+      this.logFor = this.beats;
+      this.log.replaceChildren(...this.beats.map(b => {
+        const li = document.createElement('li'); li.textContent = b.label; li.tabIndex = 0;
+        li.onclick = () => { this.pause(); this.seek(b.t1); };
+        li.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
+        return li;
+      }));
+    }
+    [...this.log.children].forEach((li, k) => {
+      li.hidden = k > i || !this.beats[k].label;
+      li.classList.toggle('now', k === i);
+      if (k === i) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+  }
+  render() {
+    if (!this.w) return;
+    const { ctx } = this;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const s = this.cur = this.stateAt(this.t);    // S.cur.get(obj) lets one object's paint read another's state
+    for (const o of this.objs) {
+      const p = s.get(o);
+      let alpha = p.opacity;
+      if (this.focus && !(p.tag && p.tag.split(' ').includes(this.focus))) alpha *= .22;
+      if (alpha <= 0.002 || p.draw === 0) continue;
+      ctx.save(); ctx.globalAlpha = alpha;
+      if (p.glow > 0) { ctx.shadowColor = paintColor(p.color || 'fg'); ctx.shadowBlur = 18 * p.glow; }
+      o.paint(ctx, p, this);
+      ctx.restore();
+    }
+    this.onFrame?.(s, this.t);
+  }
+  playFrom(t) {
+    if (reducedMotion.matches) { this.next(); return; }
+    this.seek(t); this.playing = true; this.playBtn.setAttribute('aria-pressed', 'true'); this.playBtn.textContent = 'Pause';
+    let last = performance.now();
+    const frame = now => {
+      if (!this.playing) return;
+      const t = this.t + (now - last) / 1000; last = now;
+      if (t >= this.stopAt) { this.seek(this.stopAt); return this.pause(); }
+      this.seek(t); requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+  pause() { this.playing = false; this.playBtn.setAttribute('aria-pressed', 'false'); this.playBtn.textContent = 'Play'; }
+  next() { const i = this.beatAt(this.t), b = this.beats[i]; const target = this.t < b.t1 - 1e-6 ? b.t1 : (this.beats[i + 1]?.t1 ?? this.T);
+           if (reducedMotion.matches) return this.seek(target); this.stopAt = target; this.playFrom(this.t < b.t1 - 1e-6 ? this.t : (this.beats[i + 1]?.t0 ?? this.T)); }
+  prev() { this.pause(); const i = this.beatAt(this.t), b = this.beats[i]; this.seek(this.t > b.t0 + .05 || i === 0 ? b.t0 : this.beats[i - 1].t0); }
+  setFocus(tag) { this.focus = tag; this.render(); }
+
+  // Instruments without a timeline: no buttons, the scene simply rests on its (single) frame.
+  #bareControls() {
+    this.playBtn = document.createElement('button'); this.scrub = document.createElement('input'); this.label = document.createElement('div');
+  }
+  // CSS-pixel offset inside the canvas → world coordinates.
+  toWorld(px, py) { return [(px - this.ox) / this.sx, (this.oy - py) / this.sy]; }
+  // Pointer helper for instruments: cb(x, y, type) in world coordinates, type 'down' | 'move' | 'up'.
+  onPointer(cb) {
+    const c = this.canvas; let down = false;
+    const at = e => { const r = c.getBoundingClientRect(); return this.toWorld(e.clientX - r.left, e.clientY - r.top); };
+    c.addEventListener('pointerdown', e => { down = true; c.setPointerCapture(e.pointerId); cb(...at(e), 'down'); });
+    c.addEventListener('pointermove', e => cb(...at(e), down ? 'drag' : 'move'));
+    c.addEventListener('pointerup', e => { down = false; cb(...at(e), 'up'); });
+  }
+
+  #controls() {
+    const bar = $('.controls', this.fig) || this.fig.insertBefore(Object.assign(document.createElement('div'), { className: 'controls' }), $('figcaption', this.fig));
+    bar.insertAdjacentHTML('afterbegin',
+      `<button class="btn" type="button" data-sc="replay" aria-label="Replay from the start">↺</button>
+       <button class="btn" type="button" data-sc="prev" aria-label="Previous beat">←</button>
+       <button class="btn" type="button" data-sc="play" aria-pressed="false">Play</button>
+       <button class="btn" type="button" data-sc="next" aria-label="Next beat">→</button>
+       <input class="scrub" type="range" min="0" max="100" value="0" aria-label="Timeline">`);
+    bar.insertAdjacentHTML('beforeend', '<ol class="step-log" aria-label="Steps so far"></ol><div class="sr-only" aria-live="polite"></div>');
+    const b = a => $(`[data-sc="${a}"]`, bar);
+    this.playBtn = b('play'); this.scrub = $('.scrub', bar); this.label = $('.sr-only', bar); this.log = $('.step-log', bar);
+    b('replay').onclick = () => { this.stopAt = this.T; this.playFrom(0); };
+    this.playBtn.onclick = () => { if (this.playing) return this.pause(); this.stopAt = this.T; this.playFrom(this.t >= this.T - 1e-6 ? 0 : this.t); };
+    b('next').onclick = () => { this.pause(); this.next(); };
+    b('prev').onclick = () => this.prev();
+    this.scrub.oninput = () => { this.pause(); this.seek(this.scrub.value / 100); };
+    this.fig.tabIndex = -1;
+    this.fig.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select')) return;
+      if (e.key === 'ArrowRight') { this.pause(); this.next(); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { this.prev(); e.preventDefault(); }
+    });
+  }
+}
+
+/* ---- animations: each returns (scene, t0, dur, ease) => void ---- */
+const many = (o, f) => (Array.isArray(o) ? o : [o]).map(f);
+function to(o, props, from = {}) {
+  return many(o, oo => (sc, t0, dur, e) => {
+    for (const [k, v] of Object.entries(props)) {
+      const a = k in from ? from[k] : sc.valueAt(oo, k, t0);
+      const b = typeof v === 'function' ? v(a) : v;
+      sc.track(oo, k, t0, t0 + dur, p => mix(a, b, e(p)));
+    }
+  });
+}
+const fadeIn = o => to(o, { opacity: 1 });
+const fadeOut = o => to(o, { opacity: 0 });
+const create = o => many(o, oo => [to(oo, { opacity: 1 }, { opacity: 1 }), to(oo, { draw: 1 }, { draw: 0 })]);
+const uncreate = o => to(o, { draw: 0 });
+const indicate = o => many(o, oo => (sc, t0, dur) => sc.track(oo, 'glow', t0, t0 + dur, p => ease.there(p)));
+const set = (o, props) => many(o, oo => (sc, t0) => { for (const [k, v] of Object.entries(props)) sc.track(oo, k, t0, t0, () => v); });
+// Stagger: run anims one after another inside the beat, with overlap lag (0 = sequential, 1 = together).
+const lagged = (anims, lag = .25) => (sc, t0, dur, e) => {
+  const n = anims.length, d = dur / (1 + (n - 1) * lag);
+  anims.forEach((a, i) => [a].flat(Infinity).forEach(f => f(sc, t0 + i * lag * d, d, e)));
+};
+
+/* ---- objects: plain props + paint(ctx, state, scene) ---- */
+function partialPath(ctx, pts, frac) {
+  if (pts.length < 2) return;
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); L += l; }
+  let left = L * clamp01(frac);
+  ctx.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const f = Math.min(1, left / (segs[i - 1] || 1));
+    ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f);
+    left -= segs[i - 1];
+  }
+}
+function arrowHead(ctx, x1, y1, x2, y2, size) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - size * Math.cos(a - .42), y2 - size * Math.sin(a - .42));
+  ctx.lineTo(x2 - size * Math.cos(a + .42), y2 - size * Math.sin(a + .42));
+  ctx.closePath(); ctx.fill();
+}
+const stroke = (ctx, p) => { ctx.strokeStyle = paintColor(p.color); ctx.lineWidth = p.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; if (p.dash) ctx.setLineDash(p.dash); };
+
+const Dot = p => ({ r: 6, color: 'fg', ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.beginPath(); ctx.arc(S.X(s.x), S.Y(s.y), s.r * (1 + .35 * (s.glow || 0)), 0, 2 * Math.PI); ctx.fill();
+} });
+const Line = p => ({ color: 'fg', width: 2.5, draw: 1, arrow: false, ...p, paint(ctx, s, S) {
+  const [x1, y1, x2, y2] = [S.X(s.x1), S.Y(s.y1), S.X(s.x2), S.Y(s.y2)];
+  const ex = x1 + (x2 - x1) * s.draw, ey = y1 + (y2 - y1) * s.draw;
+  stroke(ctx, s); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  if (s.arrow && s.draw > .05) { ctx.setLineDash([]); ctx.fillStyle = paintColor(s.color); arrowHead(ctx, x1, y1, ex, ey, 8 + s.width * 2); }
+} });
+const Arrow = p => Line({ arrow: true, ...p });
+const Circle = p => ({ color: 'fg', width: 2, R: 1, draw: 1, start: Math.PI / 2, ccw: true, fill: null, ...p, paint(ctx, s, S) {
+  // start is a maths angle (counter-clockwise from +x); create() sweeps counter-clockwise unless ccw: false
+  const turn = 2 * Math.PI * s.draw * (s.ccw ? 1 : -1);
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.start, -s.start - turn, s.ccw);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+const Arc = p => ({ color: 'fg', width: 3, R: 1, a0: 0, a1: Math.PI, draw: 1, ...p, paint(ctx, s, S) {
+  const a1 = s.a0 + (s.a1 - s.a0) * s.draw;
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.a0, -a1, a1 > s.a0);
+  stroke(ctx, s); ctx.stroke();
+} });
+const Path = p => ({ color: 'fg', width: 2.5, draw: 1, closed: false, fill: null, ...p, paint(ctx, s, S) {
+  const pts = s.pts.map(([x, y]) => [S.X(x), S.Y(y)]);
+  if (s.closed) pts.push(pts[0]);
+  ctx.beginPath(); partialPath(ctx, pts, s.draw);
+  if (s.fill && s.draw >= 1) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+// A function graph. To morph into another function, give fn2 and tween m: to(g, { m: 1 }).
+const Graph = p => ({ color: 'blue', width: 3, draw: 1, x0: 0, x1: 1, n: 240, m: 0, fn2: null, ...p, paint(ctx, s, S) {
+  const f = s.fn2 && s.m > 0 ? x => s.fn(x) * (1 - s.m) + s.fn2(x) * s.m : s.fn;
+  const pts = []; for (let i = 0; i <= s.n; i++) { const x = s.x0 + (s.x1 - s.x0) * i / s.n; pts.push([S.X(x), S.Y(f(x))]); }
+  ctx.beginPath(); partialPath(ctx, pts, s.draw); stroke(ctx, s); ctx.stroke();
+} });
+const Rect = p => ({ color: 'fg', width: 1.5, fill: null, radius: 4, ...p, paint(ctx, s, S) {
+  const x = S.X(s.x), y = S.Y(s.y + s.h), w = s.w * S.sx, h = s.h * S.sy;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, s.radius);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  if (s.width) { stroke(ctx, s); ctx.stroke(); }
+} });
+// Text: either a fixed string, or fmt(value) so a number can count up with to(t, { value }).
+const Text = p => ({ color: 'fg', size: 15, font: 'sans', weight: 500, align: 'center', base: 'middle', dx: 0, dy: 0, ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.textAlign = s.align; ctx.textBaseline = s.base;
+  ctx.font = `${s.weight} ${s.size}px ${tok(s.font)}`;
+  ctx.fillText(s.fmt ? s.fmt(s.value) : s.text, S.X(s.x) + s.dx, S.Y(s.y) + s.dy);
+} });
+// TeX rendered by MathJax into an image, drawn on the canvas (cached per tex+colour+size).
+const texCache = new Map();
+const Tex = p => ({ color: 'fg', size: 18, align: 'center', ...p, paint(ctx, s, S) {
+  if (!window.MathJax?.tex2svg) return;
+  const colour = paintColor(s.color), key = s.tex + '|' + colour + '|' + s.size;
+  let img = texCache.get(key);
+  if (!img) {
+    const svg = MathJax.tex2svg(s.tex, { display: false }).querySelector('svg');
+    const ex = s.size * 0.45, w = parseFloat(svg.getAttribute('width')) * ex, h = parseFloat(svg.getAttribute('height')) * ex;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    const src = svg.outerHTML.replace(/currentColor/g, colour);
+    img = new Image(); img.w = w; img.h = h; img.onload = redrawAll;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+    texCache.set(key, img);
+  }
+  if (!img.complete) return;
+  const x = S.X(s.x) - (s.align === 'center' ? img.w / 2 : s.align === 'right' ? img.w : 0);
+  ctx.drawImage(img, x, S.Y(s.y) - img.h / 2, img.w, img.h);
+} });
+// Width in CSS px of a TeX string at a size (exact once MathJax is ready, estimated before).
+function texWidth(tex, size = 18) {
+  if (!window.MathJax?.tex2svg) return tex.replace(/\\[a-z]+|[{}]/g, 'x').length * size * .5;
+  return parseFloat(MathJax.tex2svg(tex, { display: false }).querySelector('svg').getAttribute('width')) * size * .45;
+}
+// Lay TeX pieces out left to right as separate objects, so each can move, fade or recolour on its own.
+// Returns the objects (not yet added). align: 'center' | 'left'; gap in px.
+function texRow(sc, pieces, { x = 0, y = 0, size = 22, gap = 7, align = 'center', ...rest } = {}) {
+  const ws = pieces.map(p => texWidth(typeof p === 'string' ? p : p.tex, size));
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (pieces.length - 1);
+  let px = sc.X(x) - (align === 'center' ? total / 2 : 0);
+  return pieces.map((p, i) => {
+    const o = Tex({ size, ...rest, ...(typeof p === 'string' ? { tex: p } : p), x: (px - sc.ox) / sc.sx, y, align: 'left' });
+    px += ws[i] + gap; return o;
+  });
+}
+
+// Axes with ticks; returns its parts so they can be created together: sc.addAll(Axes({...})).
+function Axes({ x = [0, 10], y = [0, 6], step = [1, 1], color = 'muted', labels = true, opacity = 1 } = {}) {
+  const parts = [Arrow({ x1: x[0], y1: 0, x2: x[1], y2: 0, color, width: 1.5, opacity }), Arrow({ x1: 0, y1: y[0], x2: 0, y2: y[1], color, width: 1.5, opacity })];
+  if (labels) {
+    for (let v = Math.ceil(x[0] / step[0]) * step[0]; v < x[1]; v += step[0]) if (v) parts.push(Text({ x: v, y: 0, dy: 14, text: String(+v.toFixed(6)), size: 12, color, opacity }));
+    for (let v = Math.ceil(y[0] / step[1]) * step[1]; v < y[1]; v += step[1]) if (v) parts.push(Text({ x: 0, y: v, dx: -10, align: 'right', text: String(+v.toFixed(6)), size: 12, color, opacity }));
+  }
+  return parts;
+}
+// Any custom object: Shape({ ...props, paint(ctx, s, S) { … } }) — all numeric props tween.
+const Shape = p => p;
+
+// MathJax loads after the page: redraw scenes that contain TeX once it is ready.
+// Rebuilding (not just redrawing) lets texRow() measure real glyph widths.
+addEventListener('load', () => window.MathJax?.startup?.promise?.then(() => Scene.all.forEach(s => s.rebuild())));
+// Prose ↔ figure link: <span data-focus="fig-id:tag"> dims everything in that figure except objects tagged `tag`.
+document.addEventListener('pointerover', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('pointerout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('focusout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+
+
+// Text on a small background plate, for labels that sit over lines (call after setting ctx.font and fillStyle).
+function plateText(ctx, text, x, y, align = 'left', pad = 3) {
+  const w = ctx.measureText(text).width, h = parseInt(ctx.font.match(/(\d+)px/)[1]) + 2;
+  const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  const fill = ctx.fillStyle; ctx.fillStyle = tok('bg-2'); ctx.fillRect(x0 - pad, y - h / 2 - 1, w + 2 * pad, h + 2); ctx.fillStyle = fill;
+  ctx.textAlign = align; ctx.fillText(text, x, y);
+}
+
+/* ---------- page chrome: contents rail + reading progress ---------- */
+(() => {
+  const heads = $$('main h2[id]');
+  const list = $('.toc ol');
+  heads.forEach(h => { const li = document.createElement('li'); li.innerHTML = `<a href="#${h.id}">${h.textContent.replace(/^\d+/, m => m + ' ')}</a>`; list.append(li); });
+  const links = $$('.toc a');
+  const bar = $('.progress');
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (max > 0 ? 100 * scrollY / max : 0) + '%';
+    let cur = 0; heads.forEach((h, k) => { if (h.getBoundingClientRect().top < innerHeight * 0.35) cur = k; });
+    links.forEach((a, k) => a.setAttribute('aria-current', k === cur));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+
+/* ================= RLP: encoder, strict decoder, shared drawing ================= */
+const hx = b => b.toString(16).padStart(2, '0');
+const hexs = bs => [...bs].map(hx).join(' ');
+// BE(n): shortest big-endian base-256 digits, no leading zero (Yellow Paper App. B). BE(0) is empty.
+function BE(n) { n = BigInt(n); const out = []; while (n > 0n) { out.unshift(Number(n & 255n)); n >>= 8n; } return out; }
+// RLP encoding with a role for each byte: pay = string content, sp = string prefix, lp = list prefix, len = length bytes.
+// A string is a Uint8Array, a list is an Array.
+function enc(x) {
+  if (x instanceof Uint8Array) {
+    const b = [...x].map(v => [v, 'pay']);
+    if (x.length === 1 && x[0] < 0x80) return b;
+    if (x.length < 56) return [[0x80 + x.length, 'sp'], ...b];
+    const L = BE(x.length);
+    return [[0xb7 + L.length, 'sp'], ...L.map(v => [v, 'len']), ...b];
+  }
+  const s = x.flatMap(enc);
+  if (s.length < 56) return [[0xc0 + s.length, 'lp'], ...s];
+  const L = BE(s.length);
+  return [[0xf7 + L.length, 'lp'], ...L.map(v => [v, 'len']), ...s];
+}
+const str = (...b) => new Uint8Array(b);
+const chip = ([v, r]) => `<span class="chip r-${r}">${hx(v)}</span>`;
+function chipsOf(pairs, max = 18) {
+  if (pairs.length <= max) return pairs.map(chip).join('');
+  return pairs.slice(0, max - 2).map(chip).join('') + `<span class="chip r-more">… ${pairs.length - max + 1} more …</span>` + chip(pairs.at(-1));
+}
+
+// Strict decoder: accepts exactly the encoder's image (Coglio 2020, §4.2.1 and §4.3). Errors carry the byte index.
+class RlpError extends Error { constructor(msg, at) { super(msg); this.at = at; } }
+function parseItem(b, i, end, depth) {
+  if (depth > 64) throw new RlpError('nesting deeper than 64 levels (a limit of this page, not of RLP)', i);
+  if (i >= end) throw new RlpError('an item was expected but no bytes are left', i);
+  const f = b[i];
+  if (f < 0x80) return { item: str(f), next: i + 1 };
+  const isList = f >= 0xc0, base = isList ? 0xc0 : 0x80, kind = isList ? 'list' : 'string';
+  let start, L;
+  if (f - base < 56) {
+    L = f - base; start = i + 1;
+  } else {
+    const ll = f - base - 55;
+    if (i + 1 + ll > end) throw new RlpError(`prefix ${hx(f)} needs ${ll} length byte${ll > 1 ? 's' : ''}, but only ${end - i - 1} remain`, i);
+    if (b[i + 1] === 0) throw new RlpError(`the length of a long ${kind} starts with a zero byte (near miss: leading zero)`, i + 1);
+    let n = 0n; for (let k = 0; k < ll; k++) n = n * 256n + BigInt(b[i + 1 + k]);
+    if (n < 56n) throw new RlpError(`long form used for a ${kind} of ${n} bytes; below 56 the short form ${hx(base + Number(n))} is required (near miss)`, i);
+    if (n > BigInt(end - i - 1 - ll)) throw new RlpError(`prefix promises ${n} bytes, but only ${end - i - 1 - ll} remain`, i);
+    L = Number(n); start = i + 1 + ll;
+  }
+  if (start + L > end) throw new RlpError(`prefix ${hx(f)} promises ${L} bytes, but only ${end - start} remain`, i);
+  if (!isList) {
+    if (L === 1 && b[start] < 0x80) throw new RlpError(`81 ${hx(b[start])} encodes one byte below 0x80, which must be written as ${hx(b[start])} alone (near miss)`, i);
+    return { item: b.slice(start, start + L), next: start + L };
+  }
+  const items = []; let j = start;
+  while (j < start + L) { const r = parseItem(b, j, start + L, depth + 1); items.push(r.item); j = r.next; }
+  return { item: items, next: start + L };
+}
+function decode(b) {
+  const r = parseItem(b, 0, b.length, 0);
+  if (r.next !== b.length) throw new RlpError(`${b.length - r.next} byte${b.length - r.next > 1 ? 's' : ''} left over after the first item`, r.next);
+  return r.item;
+}
+function itemHTML(x) {
+  if (x instanceof Uint8Array) {
+    const body = x.length > 12 ? hexs(x.slice(0, 10)) + ` … (${x.length} bytes)` : hexs(x);
+    return `<span class="s">[${body || ' '}]</span>`;
+  }
+  return `<span class="l">⟨</span>${x.map(itemHTML).join(', ')}<span class="l">⟩</span>`;
+}
+
+const ROLE = { pay: 'yellow', sp: 'orange', lp: 'blue', len: 'purple', bad: 'red', ok: 'green', naive: 'yellow' };
+const ku = S => Math.max(.72, Math.min(1, S.w / 780));
+// A byte cell: rounded box with two hex digits. x, y = centre (world); w = width (world).
+const Cell = p => ({ w: 1.3, color: 'yellow', text: '00', dash: 0, ...p, paint(ctx, s, S) {
+  const g = 1 + .22 * (s.glow || 0), w = Math.max(20, s.w * S.sx - 3) * g, h = Math.min(34, Math.max(24, w * .95)) * (g > 1 ? g : 1);
+  const x = S.X(s.x) - w / 2, y = S.Y(s.y) - h / 2, a = ctx.globalAlpha, col = paintColor(s.color);
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 5);
+  ctx.fillStyle = tok('bg-2'); ctx.fill();
+  ctx.globalAlpha = a * .22; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = a;
+  ctx.strokeStyle = col; ctx.lineWidth = 1.7; if (s.dash) ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = tok('fg'); ctx.font = `500 ${Math.round(Math.max(12, Math.min(15, w * .42)))}px ${tok('mono')}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s.text, S.X(s.x), S.Y(s.y) + 1);
+} });
+// A tree node: lists are blue circles ⟨⟩, strings are yellow boxes [..].
+const Node = p => ({ kind: 'str', label: '', ...p, color: p.color || (p.kind === 'list' ? 'blue' : 'yellow'), paint(ctx, s, S) {
+  const k = ku(S), g = 1 + .3 * (s.glow || 0), x = S.X(s.x), y = S.Y(s.y), a = ctx.globalAlpha, col = paintColor(s.color);
+  ctx.beginPath();
+  if (s.kind === 'list') ctx.arc(x, y, 13 * k * g, 0, 2 * Math.PI);
+  else {
+    ctx.font = `500 ${Math.round(Math.max(12, 14 * k))}px ${tok('mono')}`;
+    const w = (ctx.measureText(s.label).width + 14) * g, h = Math.max(24, 27 * k) * g;
+    ctx.roundRect(x - w / 2, y - h / 2, w, h, 6);
+  }
+  ctx.fillStyle = tok('bg-2'); ctx.fill();
+  ctx.globalAlpha = a * .22; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = a;
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (s.kind === 'list') { ctx.fillStyle = col; ctx.font = `600 ${Math.round(Math.max(11, 12 * k))}px ${tok('mono')}`; ctx.fillText('⟨⟩', x, y + 1); }
+  else { ctx.fillStyle = tok('fg'); ctx.fillText(s.label, x, y + 1); }
+} });
+// A payload bracket from x0 to x1 (world) at height y, with its length as a label. draw: 0 → 1 grows it.
+const Bracket = p => ({ color: 'blue', label: '', draw: 1, ...p, paint(ctx, s, S) {
+  const x0 = S.X(s.x0), x1 = S.X(s.x1), y = S.Y(s.y), d = s.draw, col = paintColor(s.color), tick = 6;
+  ctx.strokeStyle = col; ctx.lineWidth = 2 * (1 + .6 * (s.glow || 0)); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0, y + tick); ctx.lineTo(x0, y); ctx.lineTo(x0 + (x1 - x0) * d, y); if (d > .999) ctx.lineTo(x1, y + tick); ctx.stroke();
+  if (s.label && d > .5) {
+    ctx.font = `600 ${Math.round(Math.max(12, 13 * ku(S)))}px ${tok('sans')}`; ctx.fillStyle = col; ctx.textBaseline = 'middle';
+    plateText(ctx, s.label, (x0 + x1) / 2, y - 1, 'center', 4);
+  }
+} });
+// A cursor: a small upward triangle under cell position i (fractional i slides).
+const Cursor = p => ({ i: 0, color: 'fg', ...p, paint(ctx, s, S) {
+  const x = S.X(s.xOf(s.i)), y = S.Y(s.y), r = 8 * (1 + .3 * (s.glow || 0));
+  ctx.fillStyle = paintColor(s.color); ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x - r, y + r * .7); ctx.lineTo(x + r, y + r * .7); ctx.closePath(); ctx.fill();
+} });
+const T = (sc, p) => sc.add(Text({ size: sc.narrow ? 13 : 15, color: 'fg-2', opacity: 0, ...p }));
+function addRow(sc, pairs, xf, y, w, extra = {}) {
+  return pairs.map(([v, r], i) => sc.add(Cell({ x: xf(i), y, w, text: hx(v), color: ROLE[r], opacity: 0, ...extra, ...(typeof extra.tagOf === 'function' ? { tag: extra.tagOf(i) } : {}) })));
+}
+// Tree: spec = { id: { kind, label, parent } }, pos = { id: [x, y] }. Edges are added first so nodes sit on top.
+function addTree(sc, spec, pos, opacity = 0, tags = {}) {
+  const edges = {}, nodes = {};
+  for (const [id, n] of Object.entries(spec)) if (n.parent) {
+    const [x1, y1] = pos[n.parent], [x2, y2] = pos[id];
+    edges[id] = sc.add(Line({ x1, y1, x2, y2, color: 'muted', width: 1.6, opacity, tag: tags[id] || id }));
+  }
+  for (const [id, n] of Object.entries(spec)) nodes[id] = sc.add(Node({ kind: n.kind, label: n.label, x: pos[id][0], y: pos[id][1], opacity, tag: tags[id] || id }));
+  return { nodes, edges };
+}
+
+// The running tree ⟨⟨[01 02 03], ⟨⟩⟩, [ff], [ ]⟩ (Coglio 2020, Fig. 1) and its 10 bytes.
+const RUN_SPEC = {
+  root: { kind: 'list' }, inner: { kind: 'list', parent: 'root' }, ff: { kind: 'str', label: '[ff]', parent: 'root' },
+  estr: { kind: 'str', label: '[ ]', parent: 'root' }, l123: { kind: 'str', label: '[01 02 03]', parent: 'inner' }, elist: { kind: 'list', parent: 'inner' },
+};
+const RUN_TREE = [[str(1, 2, 3), []], str(0xff), str()];
+const RUN = enc(RUN_TREE);   // c9 c5 83 01 02 03 c0 81 ff 80
+// Which item each byte belongs to (innermost), for prose ↔ figure focus.
+const RUN_TAG = ['outer', 'outer inner', 'outer inner l123', 'outer inner l123', 'outer inner l123', 'outer inner l123', 'outer inner elist', 'outer ff', 'outer ff', 'outer estr'];
+const runPos = { root: [8, 8.7], inner: [4.6, 7.15], ff: [10.6, 7.15], estr: [13.6, 7.15], l123: [2.8, 5.6], elist: [6.4, 5.6] };
+const runTags = { root: 'outer', inner: 'outer inner', l123: 'outer inner l123', elist: 'outer inner elist', ff: 'outer ff', estr: 'outer estr' };
+const rbx = i => .8 + i * 1.6, RCW = 1.42, RBY = 1.0;
+const edgeOf = (i, side) => rbx(i) + (side < 0 ? -RCW / 2 : RCW / 2);
+// Payload brackets: [first payload cell, last payload cell, level, label, colour, tag]
+const RUN_BR = {
+  l123: [3, 5, 0, '3', 'orange', 'outer inner l123'], elist: [6, 6, 0, '0', 'blue', 'outer inner elist'], ff: [8, 8, 0, '1', 'orange', 'outer ff'],
+  estr: [9, 9, 0, '0', 'orange', 'outer estr'], inner: [2, 6, 1, '5', 'blue', 'outer inner'], outer: [1, 9, 2, '9', 'blue', 'outer'],
+};
+function addRunBrackets(sc) {
+  const out = {};
+  for (const [id, [a, b, lv, label, color, tag]] of Object.entries(RUN_BR)) {
+    const empty = id === 'elist' || id === 'estr';
+    // An empty payload has no cells: draw a short tick just right of the prefix cell.
+    const x0 = empty ? rbx(a) - .35 : edgeOf(a, -1) + .05, x1 = empty ? rbx(a) + .35 : edgeOf(b, 1) - .05;
+    out[id] = sc.add(Bracket({ x0, x1, y: 2.05 + lv * .8, label, color, draw: 0, opacity: 0, tag }));
+  }
+  return out;
+}
+const runOpts = n => ({ x: [0, 16], y: [-.2, 9.5], pad: n ? 12 : 18 });
+
+/* ================= Figure 1: flattening loses the shape ================= */
+(() => {
+  const opts = n => n ? { x: [0, 16], y: [5.4, 20.4], pad: 12 } : { x: [0, 16], y: [1.7, 10], pad: 18 };
+  new Scene('#fig-open', opts, sc => {
+    const n = sc.narrow;
+    const P = n ? {
+      L: { root: [8, 19.7], inner: [4.5, 18.2], ff: [10.5, 18.2], estr: [13.5, 18.2], l123: [2.8, 16.7], elist: [6.4, 16.7] },
+      R: { root: [8, 11.4], a: [5, 9.9], b: [11, 9.9] }, yL: 14.9, yR: 7.5, cL: 8, cR: 8,
+      rl: i => .8 + i * 1.6, rr: i => 8 + (i - 3) * 1.6, nv: 1.6, cwL: 1.42, cwR: 1.42, msg: [8, 13.1], msg2: [8, 5.9],
+    } : {
+      L: { root: [4, 9.4], inner: [2.2, 7.9], ff: [4.8, 7.9], estr: [6.8, 7.9], l123: [1.3, 6.4], elist: [3.2, 6.4] },
+      R: { root: [12, 9.4], a: [10.4, 7.9], b: [13.6, 7.9] }, yL: 4.4, yR: 4.4, cL: 4, cR: 12,
+      rl: i => 4 + (i - 4.5) * .78, rr: i => 12 + (i - 3) * .9, nv: 1.0, cwL: .72, cwR: .82, msg: [8, 2.7], msg2: [8, 2.7],
+    };
+    const left = addTree(sc, RUN_SPEC, P.L);
+    const right = addTree(sc, { root: { kind: 'list' }, a: { kind: 'str', label: '[01 02]', parent: 'root' }, b: { kind: 'str', label: '[03 ff]', parent: 'root' } }, P.R);
+    const naive = [[1, 'naive'], [2, 'naive'], [3, 'naive'], [0xff, 'naive']];
+    const nL = addRow(sc, naive, i => P.cL + (i - 1.5) * P.nv, P.yL, n ? 1.42 : .9);
+    const nR = addRow(sc, naive, i => P.cR + (i - 1.5) * P.nv, P.yR, n ? 1.42 : .9);
+    const rL = addRow(sc, RUN, P.rl, P.yL, P.cwL);
+    const rR = addRow(sc, enc([str(1, 2), str(3, 0xff)]), P.rr, P.yR, P.cwR);
+    const eq = n ? null : T(sc, { x: 8, y: P.yL, text: '=', size: 28, color: 'red', weight: 700 });
+    const m1 = T(sc, { x: P.msg[0], y: P.msg[1], text: 'Same 4 bytes. Which tree?', color: 'red', weight: 600 });
+    const m2 = T(sc, { x: P.msg2[0], y: P.msg2[1], text: 'Different bytes: each tree keeps its own encoding.', color: 'green', weight: 600 });
+    const all = o => [...Object.values(o.edges), ...Object.values(o.nodes)];
+    sc.play('Two different trees. Left: a list holding a list, the string [ff] and the empty string. Right: a list of two strings.',
+      [create(Object.values(left.edges)), create(Object.values(right.edges)), lagged([...Object.values(left.nodes), ...Object.values(right.nodes)].map(fadeIn), .2)], 1.4);
+    sc.play('Naive flattening keeps only the string bytes. The left tree gives 01 02 03 ff.', [lagged(nL.map(fadeIn), .3)], 1);
+    sc.play('The right tree gives the same four bytes, 01 02 03 ff.', [lagged(nR.map(fadeIn), .3), ...(eq ? [fadeIn(eq)] : [])], 1);
+    sc.play('Four bytes, two possible trees: this flattening cannot be undone.', [to([...nL, ...nR], { color: 'red' }), indicate([...nL, ...nR]), fadeIn(m1)], 1);
+    sc.play('RLP writes a prefix before every string and list. The left tree becomes c9 c5 83 01 02 03 c0 81 ff 80.',
+      [fadeOut([...nL, m1, ...(eq ? [eq] : [])]), lagged(rL.map(fadeIn), .4)], 1.4);
+    sc.play('The right tree becomes c6 82 01 02 82 03 ff. The encodings differ, and each decodes back to its own tree.',
+      [fadeOut(nR), lagged(rR.map(fadeIn), .4), fadeIn(m2)], 1.4);
+  });
+})();
+
+/* ================= Figure 3: the first-byte map ================= */
+(() => {
+  const svg = $('#ruler-svg'), out = $('#ruler-out'), C = 36, NS = 'http://www.w3.org/2000/svg';
+  const range = v => v < 0x80 ? ['yellow', false] : v < 0xb8 ? ['orange', false] : v < 0xc0 ? ['orange', true] : v < 0xf8 ? ['blue', false] : ['blue', true];
+  const cells = [];
+  for (let v = 0; v < 256; v++) {
+    const [col, long] = range(v), x = (v & 15) * C, y = (v >> 4) * C;
+    const r = document.createElementNS(NS, 'rect');
+    Object.entries({ x: x + 1.5, y: y + 1.5, width: C - 3, height: C - 3, rx: 4, class: 'cell' }).forEach(([k, val]) => r.setAttribute(k, val));
+    r.dataset.v = v; r.style.fill = `color-mix(in srgb, var(--${col}) 24%, var(--bg-2))`; r.style.stroke = `var(--${col})`; r.style.strokeWidth = '1.2';
+    svg.append(r); cells.push(r);
+    if (long) { const st = document.createElementNS(NS, 'rect'); Object.entries({ x: x + 4, y: y + C - 8, width: C - 8, height: 4, rx: 1 }).forEach(([k, val]) => st.setAttribute(k, val)); st.style.fill = 'var(--purple)'; st.style.pointerEvents = 'none'; svg.append(st); }
+    const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x + C / 2); t.setAttribute('y', y + C / 2 + 4); t.setAttribute('text-anchor', 'middle'); t.textContent = hx(v); svg.append(t);
+  }
+  const sel = document.createElementNS(NS, 'rect'); sel.setAttribute('width', C - 1); sel.setAttribute('height', C - 1); sel.setAttribute('rx', 5);
+  sel.style.fill = 'none'; sel.style.stroke = 'var(--fg)'; sel.style.strokeWidth = '3'; sel.style.pointerEvents = 'none'; svg.append(sel);
+  const say = v => {
+    const h = `<b>0x${hx(v)} = ${v}</b>`;
+    if (v < 0x80) return `${h}: below 0x80. This byte is its own encoding, the one-byte string <span class="chip r-pay">${hx(v)}</span>.`;
+    if (v < 0xb8) return `${h}: a <span class="c-orange">short string</span>. Its length is ${v} − 128 = <b>${v - 128}</b> byte${v - 128 === 1 ? '' : 's'}, which follow.`;
+    if (v < 0xc0) return `${h}: a <span class="c-orange">long string</span>. The next ${v} − 183 = <b>${v - 183}</b> byte${v - 183 > 1 ? 's' : ''} hold its length, in <span class="c-purple">big-endian</span> order.`;
+    if (v < 0xf8) return `${h}: a <span class="c-blue">short list</span>. Its payload is ${v} − 192 = <b>${v - 192}</b> byte${v - 192 === 1 ? '' : 's'} of encoded items.`;
+    return `${h}: a <span class="c-blue">long list</span>. The next ${v} − 247 = <b>${v - 247}</b> byte${v - 247 > 1 ? 's' : ''} hold its payload length.`;
+  };
+  let cur = 0x83;
+  const pick = v => { cur = Math.max(0, Math.min(255, v)); sel.setAttribute('x', (cur & 15) * C + .5); sel.setAttribute('y', (cur >> 4) * C + .5); out.innerHTML = say(cur); svg.setAttribute('aria-valuenow', cur); svg.setAttribute('aria-valuetext', out.textContent); };
+  svg.addEventListener('click', e => { const v = e.target.dataset?.v; if (v != null) pick(+v); });
+  svg.addEventListener('pointerover', e => { if (e.pointerType === 'mouse') { const v = e.target.dataset?.v; if (v != null) pick(+v); } });
+  svg.addEventListener('keydown', e => { const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -16, ArrowDown: 16 }[e.key]; if (d) { e.preventDefault(); pick(cur + d); } });
+  pick(cur);
+})();
+
+/* ================= Figure 4: encoding "dog" ================= */
+(() => {
+  new Scene('#fig-dog', n => ({ x: [0, 16], y: [0, 5.6], pad: n ? 12 : 18 }), sc => {
+    const xs = [7.2, 8.8, 10.4], letters = ['d', 'o', 'g'], bytes = [0x64, 0x6f, 0x67];
+    const L = letters.map((c, i) => T(sc, { x: xs[i], y: 4.7, text: c, font: 'mono', size: sc.narrow ? 16 : 19, color: 'yellow', weight: 600 }));
+    const B = bytes.map((v, i) => sc.add(Cell({ x: xs[i], y: 3.3, w: 1.4, text: hx(v), color: 'yellow', opacity: 0 })));
+    const p = sc.add(Cell({ x: 5.6, y: 3.3, w: 1.4, text: '83', color: 'orange', opacity: 0 }));
+    const t1 = T(sc, { x: 8, y: 1.85, text: 'length = 3, and 3 < 56: short form' });
+    const t2 = T(sc, { x: 8, y: .85, text: 'prefix = 0x80 + 3 = 0x83', color: 'orange', weight: 600 });
+    sc.play('The string dog is three bytes: 64 6f 67, the ASCII codes of d, o and g.', [lagged(L.map(fadeIn), .3), lagged(B.map(fadeIn), .3)], 1.2);
+    sc.play('Its length is 3. That is below 56, so the short form applies.', [fadeIn(t1), indicate(B)], 1);
+    sc.play('The prefix is 0x80 + 3 = 0x83, written in front of the string.', [fadeIn(t2), fadeIn(p), to(p, { x: 5.6 }, { x: 3.6 }), indicate(p)], 1.1);
+    sc.play('The encoding is 83 64 6f 67: one prefix byte, then the string unchanged.', [indicate([p, ...B])], .9);
+  });
+})();
+
+/* ================= Figure 5: type a string ================= */
+(() => {
+  const inp = $('#type-in'), out = $('#type-out'), pre = $('#type-presets');
+  const presets = [['empty', ''], ['one byte "a"', 'a'], ['dog', 'dog'], ['55 × a', 'a'.repeat(55)], ['56 × a', 'a'.repeat(56)], ['Lorem (56)', 'Lorem ipsum dolor sit amet, consectetur adipisicing elit'], ['300 × a', 'a'.repeat(300)], ['é (2 bytes)', 'é']];
+  presets.forEach(([lab, v]) => { const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = lab; b.onclick = () => { inp.value = v; upd(); }; pre.append(b); });
+  const upd = () => {
+    const x = new TextEncoder().encode(inp.value), e = enc(x), n = x.length;
+    const rule = n === 1 && x[0] < 0x80 ? `one byte below 0x80: it is its own encoding`
+      : n < 56 ? `short form: prefix 0x80 + ${n} = 0x${hx(0x80 + n)}`
+      : `long form: ${n} = 0x${BE(n).map(hx).join('')} needs ${BE(n).length} length byte${BE(n).length > 1 ? 's' : ''}, prefix 0xb7 + ${BE(n).length} = 0x${hx(0xb7 + BE(n).length)}`;
+    out.innerHTML = `<div class="chips">${chipsOf(e)}</div><div><b>${n}</b> byte${n === 1 ? '' : 's'} of string → <b>${e.length}</b> bytes of RLP. ${rule}.</div>`;
+  };
+  inp.addEventListener('input', upd); upd();
+})();
+
+/* ================= Figure 6: the long form, with a length slider ================= */
+(() => {
+  const Ls = [56, 255, 256, 1024, 65535, 65536, 16777216, 4294967296];
+  const sc = new Scene('#fig-long', n => ({ x: [0, 16], y: [0, 5.8], pad: n ? 12 : 18 }), (sc, { k = 3 }) => {
+    const L = Ls[k], be = BE(L), m = be.length, dx = sc.narrow ? 1.5 : 1.35, cw = sc.narrow ? 1.38 : 1.2;
+    const px = .9, lx = i => px + dx * (i + 1), barX = px + dx * (m + 1) - cw / 2 + .15;
+    const bar = sc.add(Shape({ x0: barX, x1: 15.6, y: 3.2, opacity: 0, draw: 0, tag: 'bar', paint(ctx, s, S) {
+      const x0 = S.X(s.x0), x1 = x0 + (S.X(s.x1) - x0) * s.draw, h = 30, y = S.Y(s.y) - h / 2, a = ctx.globalAlpha;
+      ctx.beginPath(); ctx.roundRect(x0, y, Math.max(4, x1 - x0), h, 5); ctx.fillStyle = tok('bg-2'); ctx.fill();
+      ctx.globalAlpha = a * .22; ctx.fillStyle = tok('yellow'); ctx.fill(); ctx.globalAlpha = a; ctx.strokeStyle = tok('yellow'); ctx.lineWidth = 1.7; ctx.stroke();
+      if (s.draw > .6) { ctx.fillStyle = tok('fg'); ctx.font = `500 ${Math.max(12, Math.round(14 * ku(S)))}px ${tok('sans')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const room = x1 - x0 - 10, opts = [`${L.toLocaleString('en-US')} bytes of string`, `${L.toLocaleString('en-US')} bytes`, `2^${Math.round(Math.log2(L))} bytes`];
+        ctx.fillText(opts.find(t => ctx.measureText(t).width <= room) ?? opts[2], (x0 + x1) / 2, S.Y(s.y) + 1); }
+    } }));
+    const lens = be.map((v, i) => sc.add(Cell({ x: lx(i), y: 3.2, w: cw, text: hx(v), color: 'purple', opacity: 0 })));
+    const p = sc.add(Cell({ x: px, y: 3.2, w: cw, text: hx(0xb7 + m), color: 'orange', opacity: 0 }));
+    const t1 = T(sc, { x: 8, y: 5.0, text: `${L.toLocaleString('en-US')} = 0x${be.map(hx).join('')}  →  ${m} length byte${m > 1 ? 's' : ''}: ${hexs(be)}`, color: 'purple', weight: 600 });
+    const t2 = T(sc, { x: 8, y: 1.45, text: `prefix = 0xb7 + ${m} = 0x${hx(0xb7 + m)}`, color: 'orange', weight: 600 });
+    const t3 = T(sc, { x: 8, y: .55, text: `header = ${hx(0xb7 + m)} ${hexs(be)}  (${m + 1} bytes)` });
+    sc.play(`The string has ${L.toLocaleString('en-US')} bytes. That is at least 56, so one prefix byte cannot hold the length.`, [fadeIn(bar), to(bar, { draw: 1 }, { draw: 0 })], 1.1);
+    sc.play(`Write the length in base 256: ${L.toLocaleString('en-US')} = 0x${be.map(hx).join('')}, the ${m} byte${m > 1 ? 's' : ''} ${hexs(be)}.`, [lagged(lens.map(fadeIn), .4), fadeIn(t1)], 1.1);
+    sc.play(`There ${m > 1 ? 'are' : 'is'} ${m} length byte${m > 1 ? 's' : ''}, so the prefix is 0xb7 + ${m} = 0x${hx(0xb7 + m)}.`, [fadeIn(p), indicate(p), fadeIn(t2)], 1);
+    sc.play(`The header is ${hx(0xb7 + m)} ${hexs(be)}: ${m + 1} bytes in front of the string.`, [fadeIn(t3), indicate([p, ...lens])], .9);
+  });
+  range($('#long-L'), v => sc.rebuild({ k: v }), v => Ls[v].toLocaleString('en-US'));
+})();
+
+/* ================= Figure 7: headers at the boundaries ================= */
+(() => {
+  const rows = [[0, 0x61], [1, 0x61], [1, 0xff], [2, 0x61], [55, 0x61], [56, 0x61], [255, 0x61], [256, 0x61], [1024, 0x61], [65535, 0x61], [65536, 0x61]];
+  $('#lens-table tbody').innerHTML = rows.map(([n, v]) => {
+    const x = new Uint8Array(n).fill(v), e = enc(x), hdr = e.filter(([, r]) => r !== 'pay');
+    const name = n === 0 ? '[ ]' : n === 1 ? `[${hx(v)}]` : `${n} × ${hx(v)}`;
+    const rule = n === 1 && v < 0x80 ? 'single byte, no header' : n < 56 ? `short: 0x80 + ${n}` : `long: 0xb7 + ${BE(n).length}`;
+    return `<tr><td><code>${name}</code></td><td class="n">${n}</td><td>${hdr.length ? hdr.map(chip).join('') : '<span class="c-yellow">none</span>'}</td><td>${rule}</td></tr>`;
+  }).join('');
+})();
+
+/* ================= Figure 8: encoding ⟨cat, dog⟩ ================= */
+(() => {
+  new Scene('#fig-list', n => ({ x: [0, 16], y: [.6, 8.1], pad: n ? 12 : 18 }), sc => {
+    const pos = { root: [8, 7.4], cat: [4.6, 6.0], dog: [11.4, 6.0] };
+    const tr = addTree(sc, { root: { kind: 'list' }, cat: { kind: 'str', label: '[63 61 74]', parent: 'root' }, dog: { kind: 'str', label: '[64 6f 67]', parent: 'root' } }, pos);
+    const wcat = T(sc, { x: 4.6, y: 5.2, text: 'cat', font: 'mono', color: 'yellow', size: 13 }), wdog = T(sc, { x: 11.4, y: 5.2, text: 'dog', font: 'mono', color: 'yellow', size: 13 });
+    const ec = enc(str(0x63, 0x61, 0x74)), ed = enc(str(0x64, 0x6f, 0x67));
+    const fx = i => 8 + (i - 4) * 1.6, cw = 1.32;
+    const C = addRow(sc, ec, i => 4.6 + (i - 1.5) * 1.4, 3.9, cw), D = addRow(sc, ed, i => 11.4 + (i - 1.5) * 1.4, 3.9, cw);
+    const br = sc.add(Bracket({ x0: fx(1) - cw / 2, x1: fx(8) + cw / 2, y: 2.55, label: '8 bytes', color: 'blue', draw: 0, opacity: 0 }));
+    const p = sc.add(Cell({ x: fx(0), y: 1.55, w: cw, text: 'c8', color: 'blue', opacity: 0 }));
+    sc.play('The list ⟨cat, dog⟩ holds two strings of 3 bytes each.', [create(Object.values(tr.edges)), lagged(Object.values(tr.nodes).map(fadeIn), .3), fadeIn([wcat, wdog])], 1.2);
+    sc.play('Encode each item on its own: 83 63 61 74 and 83 64 6f 67.', [lagged([...C, ...D].map(fadeIn), .15)], 1.2);
+    sc.play('Join the two encodings in order. The payload is 4 + 4 = 8 bytes.', [...C.map((c, i) => to(c, { x: fx(1 + i), y: 1.55 })), ...D.map((c, i) => to(c, { x: fx(5 + i), y: 1.55 })), create(br)], 1.3);
+    sc.play('8 is below 56, so the list prefix is 0xc0 + 8 = c8. The encoding is c8 83 63 61 74 83 64 6f 67.', [fadeIn(p), indicate(p)], 1);
+  });
+})();
+
+/* ================= Figure 9: the running tree, leaves first ================= */
+(() => {
+  const sc = new Scene('#fig-core', runOpts, sc => {
+    const tr = addTree(sc, RUN_SPEC, runPos, 0, runTags);
+    const cells = addRow(sc, RUN, rbx, RBY, RCW, { tagOf: i => RUN_TAG[i] });
+    const br = addRunBrackets(sc);
+    const show = (idx, b, node) => [fadeIn(idx.map(i => cells[i])), create(br[b]), indicate(tr.nodes[node])];
+    sc.play('The running tree: an outer list holding a list, the string [ff] and the empty string.', [create(Object.values(tr.edges)), lagged(Object.values(tr.nodes).map(fadeIn), .2)], 1.2);
+    sc.play('Leaf [01 02 03] has 3 bytes: prefix 0x80 + 3 = 83, then 01 02 03.', show([2, 3, 4, 5], 'l123', 'l123'), 1.1);
+    sc.play('The empty list has an empty payload: prefix 0xc0 + 0 = c0.', show([6], 'elist', 'elist'), .9);
+    sc.play('The inner list\'s payload is 83 01 02 03 c0, 5 bytes: prefix 0xc0 + 5 = c5.', show([1], 'inner', 'inner'), 1.1);
+    sc.play('[ff] is one byte, but ff is not below 0x80, so it gets a prefix: 81 ff.', show([7, 8], 'ff', 'ff'), 1);
+    sc.play('The empty string is 0x80 + 0 = 80.', show([9], 'estr', 'estr'), .9);
+    sc.play('The outer payload is the 9 bytes after it: prefix 0xc0 + 9 = c9.', show([0], 'outer', 'root'), 1.1);
+    sc.play('Ten bytes. Each bracket covers exactly the payload its prefix counts, and the brackets nest like the tree.', [indicate(Object.values(br))], 1);
+  });
+  const out = $('.readout', sc.fig);
+  sc.onFrame = s => { const k = sc.objs.filter(o => o.text && o.w === RCW && s.get(o).opacity > .5).length; out.textContent = `bytes written: ${k} of 10`; };
+})();
+
+/* ================= Figure 10: integers ================= */
+(() => {
+  const ints = [0, 15, 127, 128, 255, 256, 1024, 100000];
+  const card = (title, be, e, note) => `<div class="card"><h4>${title}</h4>
+    <div class="row"><span class="lab">BE</span>${be.length ? be.map(v => `<span class="chip r-pay">${hx(v)}</span>`).join('') : '<span>empty</span>'}</div>
+    <div class="row"><span class="lab">RLP</span>${e.map(chip).join('')}</div>${note ? `<div>${note}</div>` : ''}</div>`;
+  $('#int-cards').innerHTML = ints.map(n => card(`${n.toLocaleString('en-US')}`, BE(n), enc(new Uint8Array(BE(n))),
+      n === 0 ? 'Zero is the empty string.' : n === 127 ? 'The largest integer with no prefix.' : n === 128 ? 'BE gives 80, which is not below 0x80.' : '')).join('')
+    + card('the byte string 00', [0], enc(str(0)), 'A one-byte string, not the integer 0.')
+    + `<div class="card"><h4>the string 00 04 00</h4><div class="row"><span class="lab">RLP</span>${enc(str(0, 4, 0)).map(chip).join('')}</div><div>Valid RLP. As an integer it has a <span class="c-red">leading zero</span>, so a protocol reading 1024 must reject it and expect <code>82 04 00</code>.</div></div>`;
+})();
+
+/* ================= Figure 11: decoding walk ================= */
+(() => {
+  const sc = new Scene('#fig-decode', runOpts, sc => {
+    const tr = addTree(sc, RUN_SPEC, runPos, 0, runTags);
+    const cells = addRow(sc, RUN, rbx, RBY, RCW, { opacity: 1, tagOf: i => RUN_TAG[i] });
+    const br = addRunBrackets(sc);
+    const cur = sc.add(Cursor({ i: 0, y: .1, xOf: rbx, color: 'yellow', opacity: 0 }));
+    const node = id => [fadeIn(tr.nodes[id]), ...(tr.edges[id] ? [create(tr.edges[id])] : []), indicate(tr.nodes[id])];
+    sc.play('Read c9. It lies in c0–f7: a list whose payload is the next 9 bytes.', [fadeIn(cur), indicate(cells[0]), create(br.outer), ...node('root')], 1.2);
+    sc.play('Read c5: a list with a 5-byte payload, the first item of the outer list.', [to(cur, { i: 1 }), indicate(cells[1]), create(br.inner), ...node('inner')], 1.1);
+    sc.play('Read 83: a string of 3 bytes. Copy 01 02 03 without reading them as prefixes.', [to(cur, { i: 2 }), indicate(cells[2]), create(br.l123), ...node('l123'), to([cells[3], cells[4], cells[5]], { opacity: .45 })], 1.2);
+    sc.play('Jump to c0: the empty list. The inner list\'s 5 bytes are now used up, so it is complete.', [to(cur, { i: 6 }), indicate(cells[6]), create(br.elist), ...node('elist')], 1.2);
+    sc.play('Read 81: a string of 1 byte, ff. The outer list has 1 byte left.', [to(cur, { i: 7 }), indicate(cells[7]), create(br.ff), ...node('ff'), to(cells[8], { opacity: .45 })], 1.1);
+    sc.play('Jump to 80: the empty string. All 9 payload bytes and all input are used up, so decoding succeeds.', [to(cur, { i: 9 }), indicate(cells[9]), create(br.estr), ...node('estr')], 1.2);
+  });
+  const out = $('.readout', sc.fig), curObj = () => sc.objs.find(o => 'xOf' in o);
+  sc.onFrame = s => { const c = s.get(curObj()); const i = Math.round(c.i); out.textContent = `cursor at byte ${i}: ${hx(RUN[i][0])}`; };
+})();
+
+/* ================= Figure 12: strict decoder ================= */
+(() => {
+  const inp = $('#dec-in'), out = $('#dec-out'), pre = $('#dec-presets');
+  const rep = (s, n) => Array(n).fill(s).join(' ');
+  const presets = [
+    ['running tree', 'c9 c5 83 01 02 03 c0 81 ff 80'], ['⟨cat, dog⟩', 'c8 83 63 61 74 83 64 6f 67'], ['set-theoretic 3', 'c7 c0 c1 c0 c3 c0 c1 c0'],
+    ['near miss 1: 81 05', '81 05'], ['near miss 2: b9 00 38', 'b9 00 38 ' + rep('61', 56)], ['near miss 3: b8 03', 'b8 03 64 6f 67'],
+    ['near miss 4: f9 00 38', 'f9 00 38 ' + rep('c0', 56)], ['near miss 5: f8 08', 'f8 08 83 63 61 74 83 64 6f 67'],
+    ['truncated', '83 64 6f'], ['left over', '80 80'], ['item crosses list end', 'c2 83 64 6f 67'],
+  ];
+  presets.forEach(([lab, v]) => { const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = lab; b.onclick = () => { inp.value = v; upd(); }; pre.append(b); });
+  const upd = () => {
+    const clean = inp.value.replace(/0x/gi, '').replace(/[^0-9a-f]/gi, '');
+    if (clean.length % 2) { out.innerHTML = `<span class="verdict-bad">Odd number of hex digits.</span> Each byte is two digits.`; return; }
+    const b = new Uint8Array(clean.match(/../g)?.map(h => parseInt(h, 16)) ?? []);
+    try {
+      const t = decode(b);
+      out.innerHTML = `<div><span class="verdict-ok">Valid.</span> ${b.length} bytes decode to:</div><div class="tree-out">${itemHTML(t)}</div>`;
+    } catch (e) {
+      if (!(e instanceof RlpError)) throw e;
+      const shown = [...b].slice(0, 24).map((v, i) => `<span class="chip ${i === e.at ? 'r-bad' : 'r-more'}">${hx(v)}</span>`).join('') + (b.length > 24 ? '<span class="chip r-more">…</span>' : '');
+      out.innerHTML = `<div><span class="verdict-bad">Rejected at byte ${e.at}.</span> ${e.message}.</div><div class="chips">${shown}</div>`;
+    }
+  };
+  inp.addEventListener('input', upd); upd();
+})();
+
+/* ================= Figure 13: the five near misses ================= */
+(() => {
+  const c = s => s.split(' ').map(t => t === '…' ? '<span class="chip r-more">…</span>' : `<span class="chip r-bad">${t}</span>`).join('');
+  const g = s => s.split(' ').map(t => t === '…' ? '<span class="chip r-more">…</span>' : `<span class="chip r-ok">${t}</span>`).join('');
+  const Q = [
+    ['1. Prefix on a small byte', '81 05', 'the string [05]', '05', 'A single byte below 0x80 is its own encoding.'],
+    ['2. Leading zero, string', 'b9 00 38 …', 'a string of 56 bytes', 'b8 38 …', 'Length bytes have no leading zero.'],
+    ['3. Long form, short string', 'b8 03 64 6f 67', 'the string dog', '83 64 6f 67', 'Lengths below 56 use the short form.'],
+    ['4. Leading zero, list', 'f9 00 38 …', 'a list with a 56-byte payload', 'f8 38 …', 'Length bytes have no leading zero.'],
+    ['5. Long form, short list', 'f8 08 83 63 61 74 83 64 6f 67', '⟨cat, dog⟩', 'c8 83 63 61 74 83 64 6f 67', 'Payloads below 56 use the short form.'],
+  ];
+  $('#quasi-cards').innerHTML = Q.map(([t, bad, means, good, rule]) => `<div class="card"><h4>${t}</h4>
+    <div class="row"><span class="lab">rejected</span>${c(bad)}</div><div class="row"><span class="lab">canonical</span>${g(good)}</div>
+    <div>Would mean ${means}. ${rule}</div></div>`).join('');
+})();
+
+/* ================= Figure 14: prefix-freeness ================= */
+(() => {
+  new Scene('#fig-prefix', n => ({ x: [0, 16], y: [.6, 6.0], pad: n ? 10 : 18 }), sc => {
+    const xf = i => 1.9 + i * 1.2, cw = 1.08;
+    const A = addRow(sc, RUN, xf, 4.4, cw), B = addRow(sc, [...RUN, [1, 'pay'], [2, 'pay']], xf, 2.0, cw);
+    B[10].dash = B[11].dash = 1; B[10].init.dash = B[11].init.dash = 1;
+    const la = T(sc, { x: .7, y: 4.4, text: 'A', weight: 700, color: 'fg' }), lb = T(sc, { x: .7, y: 2.0, text: 'B', weight: 700, color: 'fg' });
+    const bA = sc.add(Bracket({ x0: xf(1) - cw / 2, x1: xf(9) + cw / 2, y: 5.25, label: '9', color: 'blue', draw: 0, opacity: 0 }));
+    const bB = sc.add(Bracket({ x0: xf(1) - cw / 2, x1: xf(9) + cw / 2, y: 2.85, label: '9', color: 'blue', draw: 0, opacity: 0 }));
+    const end = sc.add(Line({ x1: (xf(9) + xf(10)) / 2, y1: 1.2, x2: (xf(9) + xf(10)) / 2, y2: 5.7, color: 'green', width: 2, dash: [5, 4], opacity: 0, draw: 0 }));
+    sc.play('Suppose a valid encoding A is a strict prefix of a valid encoding B: B is A followed by more bytes.', [fadeIn([la, lb]), lagged([...A, ...B].map(fadeIn), .5)], 1.3);
+    sc.play('Both start with c9. A decoder that reads c9 learns: one header byte, then a 9-byte payload.', [indicate([A[0], B[0]]), create([bA, bB])], 1.1);
+    sc.play('So B, like A, ends after 1 + 9 = 10 bytes.', [create(end)], .9);
+    sc.play('B\'s bytes 01 02 are not part of its item, so B is not one valid encoding. The assumption fails.', [to([B[10], B[11]], { color: 'red' }), indicate([B[10], B[11]])], 1);
+  });
+})();
+
+/* ================= Figure 15: the 2^64 limit ================= */
+(() => {
+  new Scene('#fig-limit', n => ({ x: [0, 16], y: [0, 6.7], pad: n ? 10 : 18 }), sc => {
+    const xf = i => 1.3 + i * 1.66, cw = sc.narrow ? 1.45 : 1.3;
+    const row = (base, y) => Array.from({ length: 8 }, (_, i) => sc.add(Cell({ x: xf(i), y, w: cw, text: hx(base + 1 + i), color: base < 0xc0 ? 'orange' : 'blue', opacity: 0 })));
+    const labs = y => Array.from({ length: 8 }, (_, i) => T(sc, { x: xf(i), y, text: String(i + 1), color: 'purple', weight: 600, font: 'mono' }));
+    const h1 = T(sc, { x: .5, y: 6.25, text: 'long string: prefix = 0xb7 + ll', align: 'left', color: 'fg' });
+    const r1 = row(0xb7, 5.2), l1 = labs(4.45);
+    const g1 = sc.add(Cell({ x: xf(8), y: 5.2, w: cw, text: 'c0', color: 'red', dash: 1, opacity: 0 })), q1 = T(sc, { x: xf(8), y: 4.45, text: '9?', color: 'red', weight: 600, font: 'mono' });
+    const h2 = T(sc, { x: .5, y: 3.65, text: 'long list: prefix = 0xf7 + ll', align: 'left', color: 'fg' });
+    const r2 = row(0xf7, 2.6), l2 = labs(1.85);
+    const g2 = sc.add(Cell({ x: xf(8), y: 2.6, w: cw, text: '100', color: 'red', dash: 1, opacity: 0 })), q2 = T(sc, { x: xf(8), y: 1.85, text: '9?', color: 'red', weight: 600, font: 'mono' });
+    const fin = T(sc, { x: 8, y: .7, text: 'll ≤ 8, so every length < 256⁸ = 2⁶⁴', color: 'purple', weight: 600 });
+    sc.play('Long-string prefixes run from b8 to bf: ll = 1 to 8 length bytes.', [fadeIn(h1), lagged([...r1, ...l1].map(fadeIn), .3)], 1.2);
+    sc.play('ll = 9 would need 0xb7 + 9 = c0, which already means the empty list.', [fadeIn([g1, q1]), indicate(g1)], 1);
+    sc.play('Long-list prefixes run from f8 to ff: again ll = 1 to 8.', [fadeIn(h2), lagged([...r2, ...l2].map(fadeIn), .3)], 1.2);
+    sc.play('ll = 9 would need 0xf7 + 9 = 0x100, which does not fit in a byte.', [fadeIn([g2, q2]), indicate(g2)], 1);
+    sc.play('So a length has at most 8 bytes, and every string or payload is shorter than 256⁸ = 2⁶⁴ bytes.', [fadeIn(fin), indicate(fin)], 1);
+  });
+})();
+
+/* ================= Figure 16: the whole picture ================= */
+(() => {
+  new Scene('#fig-whole', n => ({ x: [0, 16], y: [.9, 10], pad: n ? 10 : 18 }), sc => {
+    const s0 = .4, s1 = 15.6, sxv = v => s0 + (v + .5) / 256 * (s1 - s0), by = 3.3, sy0 = 8.1, sy1 = 8.8;
+    const colOf = v => v < 0x80 ? 'yellow' : v < 0xc0 ? 'orange' : 'blue';
+    sc.add(Shape({ tag: 'strip', paint(ctx, s, S) {
+      const w = (S.X(s1) - S.X(s0)) / 256, a = ctx.globalAlpha;
+      for (let v = 0; v < 256; v++) {
+        const x = S.X(s0) + v * w;
+        ctx.globalAlpha = a * .55; ctx.fillStyle = tok(colOf(v)); ctx.fillRect(x, S.Y(sy1), w + .5, S.Y(sy0) - S.Y(sy1));
+        if ((v >= 0xb8 && v < 0xc0) || v >= 0xf8) { ctx.globalAlpha = a; ctx.fillStyle = tok('purple'); ctx.fillRect(x, S.Y(sy0) - 4, w + .5, 4); }
+      }
+      ctx.globalAlpha = a; ctx.fillStyle = tok('muted'); ctx.font = `500 ${Math.max(11, Math.round(12 * ku(S)))}px ${tok('mono')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const ticks = S.narrow ? [0, 0x80, 0xc0, 0xff] : [0, 0x80, 0xb8, 0xc0, 0xf8, 0xff];
+      for (const v of ticks) { ctx.fillRect(S.X(sxv(v)) - .5, S.Y(sy1) - 6, 1, 6); ctx.fillText(hx(v), S.X(sxv(v)), S.Y(sy1) - 14); }
+    } }));
+    const cells = addRow(sc, RUN, rbx, by, RCW, { opacity: 1 });
+    const steps = [
+      [0, 'c9 = 201 is in c0–f7: a list, payload 9 bytes.'], [1, 'c5 = 197: a list, payload 5 bytes.'],
+      [2, '83 = 131 is in 80–b7: a string of 3 bytes.', [3, 4, 5]], [6, 'c0 = 192: the empty list.'],
+      [7, '81 = 129: a string of 1 byte.', [8]], [9, '80 = 128: the empty string.'],
+    ];
+    const arrows = steps.map(([i]) => sc.add(Arrow({ x1: rbx(i), y1: by + .55, x2: sxv(RUN[i][0]), y2: sy0 - .1, color: ROLE[RUN[i][1]], width: 2, opacity: 0, draw: 0 })));
+    const texts = steps.map(([, t]) => T(sc, { x: 8, y: 1.75, text: t, weight: 600 }));
+    sc.play('The first-byte map as a strip of 256 values, above the 10 bytes of the running tree.', [indicate(cells)], 1);
+    steps.forEach(([i, t, copy], k) => {
+      const anims = [create(arrows[k]), fadeIn(texts[k]), indicate(cells[i]), ...(k ? [to(arrows[k - 1], { opacity: .35 }), fadeOut(texts[k - 1])] : [])];
+      if (copy) anims.push(to(copy.map(j => cells[j]), { opacity: .4 }));
+      const lab = copy ? `${t} The content byte${copy.length > 1 ? 's' : ''} ${copy.map(j => hx(RUN[j][0])).join(' ')} ${copy.length > 1 ? 'are' : 'is'} copied, never looked up.` : t;
+      sc.play(k === steps.length - 1 ? lab + ' Ten bytes read; the tree is rebuilt.' : lab, anims, 1.1);
+    });
+  });
+})();
+</script>
