@@ -1,0 +1,1869 @@
+<title>Proximity Gaps</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script>
+  // MathJax: SVG output needs no font files, so it works under the artifact CSP.
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'local' },   // local: each SVG carries its glyphs, so Tex() can draw it into a canvas
+    options: { skipHtmlTags: ['script', 'style', 'textarea', 'svg', 'canvas'] }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js"></script>
+<style>
+/* Layout: one reading column (~66ch); figures break out to a wider band; sticky contents rail on wide screens.
+   Dark-first "slate" ground, light "paper" variant. Semantic hues keep ONE meaning across the whole page. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --bg-2: #151a22;        /* figure stage, callouts */
+  --bg-3: #1d2330;        /* controls, hover */
+  --fg: #e7e9ef;
+  --fg-2: #b4bccb;        /* secondary text */
+  --muted: #7d8699;       /* captions, axis labels */
+  --rule: #273042;
+  --grid: #1f2633;        /* faint grid lines in figures */
+  --blue: #58c4dd;
+  --teal: #5cd0b3;
+  --green: #83c167;
+  --yellow: #f2d45c;
+  --orange: #ff9b54;
+  --red: #fc6255;
+  --purple: #b48ee8;
+  --focus: #f2d45c;
+  --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --col: 41rem;           /* reading measure */
+  --wide: 62rem;          /* figure band */
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+    --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+    --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+    --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9; --bg-2: #ffffff; --bg-3: #eceff4;
+  --fg: #191c23; --fg-2: #3c4352; --muted: #5f687a; --rule: #d9dee7; --grid: #e9edf3;
+  --blue: #1a7fa8; --teal: #0f8a71; --green: #3d8c2c; --yellow: #a87f00;
+  --orange: #c45f17; --red: #cf3426; --purple: #7647c2; --focus: #1a7fa8;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 1.125rem/1.68 var(--serif);
+  font-optical-sizing: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 6rem;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+
+/* ---------- page frame ---------- */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.page > * { width: 100%; max-width: var(--col); min-width: 0; }
+.page > .wide { max-width: var(--wide); }
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 3px; width: 0; background: var(--blue); z-index: 11; }
+
+/* contents rail (wide screens only) */
+.toc { display: none; }
+@media (min-width: 1280px) {
+  .toc { display: block; position: fixed; top: calc(5rem + env(safe-area-inset-top, 0px)); left: max(24px, calc((100vw - var(--wide)) / 2 - 15rem)); width: 13rem;
+         font: 500 .8rem/1.4 var(--sans); }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; counter-reset: s; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding-left: .7rem; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--fg); }
+  .toc a[aria-current="true"] { color: var(--fg); border-left-color: var(--blue); }
+}
+
+/* ---------- type ---------- */
+header.hero { padding-block: 4.5rem 1.5rem; }
+.kicker { font: 600 .78rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin: 0 0 1rem; }
+h1 { font: 700 clamp(2.3rem, 6vw, 3.6rem)/1.06 var(--serif); letter-spacing: -.015em; margin: 0 0 1rem; text-wrap: balance; }
+.lede { font-size: 1.3rem; line-height: 1.55; color: var(--fg-2); margin: 0; text-wrap: pretty; }
+h2 { font: 700 1.9rem/1.15 var(--serif); letter-spacing: -.01em; margin: 4.5rem 0 1rem; text-wrap: balance; scroll-margin-top: 2rem; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: .5rem; }
+h3 { font: 600 1.25rem/1.3 var(--serif); margin: 2.4rem 0 .6rem; text-wrap: balance; }
+p { margin: 0 0 1.1rem; text-wrap: pretty; }
+a { color: var(--blue); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+code, kbd { font: 400 .88em/1 var(--mono); background: var(--bg-3); padding: .12em .35em; border-radius: 4px; }
+dfn { font-style: normal; font-weight: 600; }
+.mjx-display, mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding-block: .25rem; }
+
+/* semantic colour classes: the same hue means the same object in prose, math and figures */
+.c-blue { color: var(--blue); } .c-teal { color: var(--teal); } .c-green { color: var(--green); }
+.c-yellow { color: var(--yellow); } .c-orange { color: var(--orange); } .c-red { color: var(--red); } .c-purple { color: var(--purple); }
+
+/* ---------- prerequisites box ---------- */
+.prereq { font: 400 .95rem/1.55 var(--sans); color: var(--fg-2); border-block: 1px solid var(--rule); padding-block: 1rem; margin-block: 2rem; display: grid; gap: .4rem; }
+.prereq b { color: var(--fg); font-weight: 600; }
+
+/* ---------- textbook environments ---------- */
+.env { margin-block: 1.6rem; padding: 1rem 1.2rem; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 8px; }
+.env > .env-head { font: 600 .78rem/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .6rem; color: var(--muted); }
+.env > :last-child { margin-bottom: 0; }
+.env.def > .env-head { color: var(--blue); }
+.env.thm > .env-head { color: var(--purple); }
+.env.ex  > .env-head { color: var(--green); }
+.env.warn > .env-head { color: var(--red); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: .5rem; }
+.steps > li::before { content: "Step " counter(st); font: 600 .78rem/2.1 var(--sans); color: var(--muted); }
+
+details.check { margin-block: 1.6rem; border: 1px dashed var(--rule); border-radius: 8px; padding: .9rem 1.2rem; }
+details.check > summary { cursor: pointer; font: 600 .95rem/1.4 var(--sans); list-style: none; }
+details.check > summary::before { content: "Check yourself · "; color: var(--yellow); }
+details.check[open] > summary { margin-bottom: .7rem; }
+details.check .answer { border-top: 1px solid var(--rule); padding-top: .7rem; }
+
+/* ---------- figures ---------- */
+figure.fig { margin: 2.2rem 0 2.6rem; }
+.fig .stage { position: relative; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.fig canvas, .fig svg.plot { display: block; width: 100%; height: auto; max-width: 100%; touch-action: manipulation; }
+/* Only a figure the reader drags on takes over horizontal touch; vertical swipes still scroll the page. */
+.fig canvas.drag, .fig svg.plot.drag { touch-action: pan-y; }
+.fig .try { position: absolute; top: .7rem; left: .9rem; font: 500 .78rem/1.3 var(--sans); color: var(--muted); pointer-events: none; }
+.fig .readout { position: absolute; top: .7rem; right: .9rem; font: 500 .85rem/1.45 var(--mono); color: var(--fg-2); text-align: right; font-variant-numeric: tabular-nums; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.2rem; padding: .8rem .2rem 0; font: 500 .85rem/1.2 var(--sans); color: var(--fg-2); }
+.controls label { display: inline-flex; align-items: center; gap: .6rem; }
+.controls output { font-family: var(--mono); color: var(--fg); min-width: 2.5ch; font-variant-numeric: tabular-nums; }
+.btn { font: 600 .82rem/1 var(--sans); color: var(--fg); background: var(--bg-3); border: 1px solid var(--rule); border-radius: 6px; padding: .55rem .8rem; cursor: pointer; min-height: 36px; }
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; }
+input[type="range"] { accent-color: var(--blue); width: 9rem; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.step-label { flex-basis: 100%; font: 400 1rem/1.5 var(--serif); color: var(--fg); min-height: 3em; }
+.step-log { flex-basis: 100%; list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; counter-reset: st; font: 400 .95rem/1.45 var(--serif); }
+.step-log li { counter-increment: st; display: grid; grid-template-columns: 2rem minmax(0, 1fr); padding: .2rem .6rem .2rem 0; color: var(--muted); border-left: 3px solid transparent; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+.step-log li::before { content: counter(st); font: 600 .74rem/1.95 var(--sans); text-align: right; padding-right: .6rem; }
+.step-log li:hover { color: var(--fg-2); }
+.step-log li.now { color: var(--fg); background: var(--bg-3); border-left-color: var(--yellow); }
+.step-log li.now::before { color: var(--yellow); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+input.scrub { flex: 1 1 10rem; width: auto; min-width: 8rem; accent-color: var(--yellow); }
+[data-focus] { cursor: help; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 4px; border-radius: 3px; }
+[data-focus]:hover, [data-focus]:focus-visible { background: var(--bg-3); }
+figcaption { font: 400 .92rem/1.55 var(--sans); color: var(--fg-2); margin-top: .8rem; max-width: var(--col); }
+figcaption b { color: var(--fg); font-weight: 600; }
+.svg-text { font: 500 13px var(--sans); fill: currentColor; }
+svg.micro { display: inline-block; vertical-align: middle; height: 1.5em; width: auto; margin-inline: .1em; overflow: visible; }
+
+footer.refs { margin-top: 5rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; font: 400 .95rem/1.6 var(--sans); color: var(--fg-2); }
+footer.refs ol { padding-left: 1.2rem; }
+
+@media (max-width: 560px) {
+  body { font-size: 1.05rem; }
+  .step-log { font-size: .9rem; }
+  h2 { font-size: 1.55rem; margin-top: 3.5rem; }
+  .env { padding: .9rem 1rem; }
+  .fig .readout { position: static; padding: .4rem .7rem 0; text-align: left; }
+  .fig .try { position: static; display: block; padding: .6rem .7rem 0; }
+}
+.seg { display: inline-flex; gap: .3rem; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font: 500 .82rem/1.3 var(--sans); color: var(--fg-2); margin: .2rem 0 0; }
+.legend i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: .35em; vertical-align: -.05em; }
+.legend i.ring { background: none; border: 2px solid currentColor; }
+table.nums { border-collapse: collapse; font: 400 .9rem/1.4 var(--mono); margin: 1rem 0; width: 100%; }
+table.nums th, table.nums td { border-bottom: 1px solid var(--rule); padding: .35rem .5rem; text-align: right; }
+table.nums th { font: 600 .78rem/1.3 var(--sans); color: var(--muted); }
+table.nums td:first-child, table.nums th:first-child { text-align: left; }
+.scrollx { overflow-x: auto; }
+.fig .readout.bottom { top: auto; bottom: .6rem; }
+</style>
+
+<div class="progress" aria-hidden="true"></div>
+<nav class="toc" aria-label="Contents"><ol></ol></nav>
+
+<main class="page">
+  <header class="hero">
+    <p class="kicker">Hash-based SNARKs from zero</p>
+    <h1>Proximity gaps</h1>
+    <p class="lede">What it means to prove that a word is close to a Reed-Solomon code, why a random fold keeps far words far, and how FRI and WHIR turn that one fact into a proof system.</p>
+  </header>
+
+  <div class="prereq">
+    <div><b>You need:</b> arithmetic modulo a prime, and polynomials (a polynomial of degree less than \(k\) is fixed by its values at \(k\) points).</div>
+    <div><b>You will build:</b> Reed-Solomon codes, distance and its three radii, list decoding, proximity gaps, correlated agreement, mutual correlated agreement, and the FRI and WHIR protocols that rely on them.</div>
+    <div><b>Colours:</b> <span class="c-green">green</span> is the code and its codewords, <span class="c-red">red</span> an error, <span class="c-blue">blue</span> and <span class="c-purple">purple</span> the words \(u\) and \(v\) a prover commits to, <span class="c-teal">teal</span> a folded word, <span class="c-yellow">yellow</span> the verifier's randomness, <span class="c-orange">orange</span> a radius.</div>
+  </div>
+
+  <section>
+    <h2 id="close"><span class="num">1</span>Spot checks see far, not wrong</h2>
+    <p>A SNARK is a short proof that a computation was done correctly, which a verifier checks far faster than redoing the computation. A hash-based SNARK ends the same way every time. The prover has written down a long list of field elements, a <dfn>word</dfn>, and committed to it with a Merkle root. The verifier wants to know that the word is a list of values of a low-degree polynomial. It can afford to read a few dozen entries, out of millions.</p>
+    <p>Figure 1 shows what a few reads can and cannot see. The word holds the values of one polynomial at 16 points, and three reads are made.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-open" aria-labelledby="cap-open">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="A word of 16 values on a grid. One changed value escapes three spot checks; eight changed values are caught by one of them."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-open"><b>Figure 1.</b> A single <span class="c-red">changed value</span> escapes three <span class="c-yellow">spot checks</span> with probability \((15/16)^3 \approx 0.82\). Eight changed values escape with probability \((8/16)^3 = 0.125\). Reading a few positions detects a word that differs from the right one in many places, rarely in one place.</figcaption>
+  </figure>
+
+  <section>
+    <p>The verifier in Figure 1 was even given the right word to compare against, which a real verifier never has. Still it misses the single change most of the time. A few reads can only ever answer a weaker question: <em>is the word far from every acceptable word?</em> Making "far" and "acceptable" precise, and answering that question with a handful of reads, is the subject of this page.</p>
+  </section>
+
+  <section>
+    <h2 id="rs"><span class="num">2</span>Reed-Solomon codes</h2>
+    <p>The acceptable words are the evaluations of low-degree polynomials. Our running example works in the field \(\mathbb{F}_{17}\) (integers modulo 17) and evaluates at every non-zero element, the 16 points \(L = \{1, 2, \dots, 16\}\).</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 1 (Reed-Solomon code)</p>
+      <p>Let \(\mathbb{F}\) be a finite field, \(L \subseteq \mathbb{F}\) a set of \(n\) points (the <dfn>domain</dfn>) and \(k \le n\). The Reed-Solomon code is
+      \[ \class{c-green}{\mathrm{RS}[\mathbb{F}, L, k]} = \bigl\{\, (p(x))_{x \in L} \;:\; p \in \mathbb{F}[X],\ \deg p &lt; k \,\bigr\} \subseteq \mathbb{F}^{L}. \]
+      Its elements are <dfn>codewords</dfn>; \(n\) is the <dfn>length</dfn>, \(k\) the <dfn>dimension</dfn> and \(\rho = k/n\) the <dfn>rate</dfn>.</p>
+    </div>
+
+    <p>We take \(k = 4\): codewords are the value lists of cubics, and the rate is \(\rho = 4/16 = 1/4\). Our main codeword is
+    \[ \class{c-green}{f(x)} = 3 + x + 4x^2 + x^3, \qquad \bigl(f(1), \dots, f(16)\bigr) = (9, 12, 1, 16, 12, 12, 5, 14, 11, 2, 10, 7, 16, 9, 9, 5). \]
+    For instance \(f(2) = 3 + 2 + 16 + 8 = 29 = 12 \pmod{17}\). Figure 2 draws a word as 16 columns, one per point of \(L\), with its value as the height of a dot. A <span class="c-green">green ring</span> marks where the codeword is.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-interp" aria-labelledby="cap-interp">
+    <div class="stage">
+      <canvas class="drag" data-aspect="0.5" data-aspect-narrow="1.0" tabindex="0" role="img" aria-label="A grid with four draggable handles. The other twelve values of the cubic through them update live."></canvas>
+      <div class="try">Drag a <span class="c-yellow">yellow handle</span> up or down (or focus, ←/→ to pick, ↑/↓ to move)</div>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-interp"><b>Figure 2.</b> Four values fix a cubic, so they fix the whole codeword: moving one <span class="c-yellow">handle</span> moves the other twelve <span class="c-green">entries</span> at once. A codeword is redundant: 16 entries carry only 4 values' worth of information.</figcaption>
+  </figure>
+
+  <section>
+    <p>That redundancy is what lets a code detect changes. Two distinct codewords cannot agree in many places: their difference is a non-zero polynomial of degree less than \(k\), which has fewer than \(k\) roots. Figure 3 takes a second codeword \(\class{c-purple}{g} = f + 5(x-2)(x-7)(x-11)\) and counts.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-dist" aria-labelledby="cap-dist">
+    <div class="stage">
+      <canvas data-aspect="0.52" data-aspect-narrow="1.15" role="img" aria-label="Two codewords f and g drawn together; they agree only at x = 2, 7, 11."></canvas>
+    </div>
+    <figcaption id="cap-dist"><b>Figure 3.</b> The codewords <span class="c-blue">\(f\)</span> and <span class="c-purple">\(g\)</span> agree at exactly the three roots of \(f - g\) and differ at the other 13 points. No two cubics can share four points, so any two codewords of this code differ in at least \(16 - 3 = 13\) places.</figcaption>
+  </figure>
+
+  <section>
+    <div class="env thm">
+      <p class="env-head">Fact 1 (minimum distance)</p>
+      <p>Two distinct codewords of \(\mathrm{RS}[\mathbb{F}, L, k]\) agree on at most \(k - 1\) points, so they differ in at least \(d = n - k + 1\) points. In relative terms the code's distance is \(d/n \approx 1 - \rho\).</p>
+    </div>
+    <p>The code is also <dfn>linear</dfn>: sums and multiples of codewords are codewords, because the same holds for polynomials of degree less than \(k\). In the running example \(d = 16 - 4 + 1 = 13\). A low rate buys a large distance: at \(\rho = 1/4\), codewords differ in more than three quarters of their entries.</p>
+  </section>
+
+  <section>
+    <h2 id="distance"><span class="num">3</span>Distance, closeness and three radii</h2>
+    <p>"Far" needs a ruler. The ruler is the count of disagreeing entries.</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 2 (distance to a code)</p>
+      <p>For words \(w, c \in \mathbb{F}^L\), the relative Hamming distance is \(\Delta(w, c) = \tfrac{1}{n}\,\bigl|\{x \in L : w(x) \ne c(x)\}\bigr|\). The distance from \(w\) to a code \(\mathcal{C}\) is \(\Delta(w, \mathcal{C}) = \min_{c \in \mathcal{C}} \Delta(w, c)\). The word \(w\) is <dfn>\(\delta\)-close</dfn> to \(\mathcal{C}\) if \(\Delta(w, \mathcal{C}) \le \delta\), and <dfn>\(\delta\)-far</dfn> otherwise. The <dfn>list</dfn> \(\mathrm{List}(w, \delta)\) is the set of codewords within \(\delta\) of \(w\).</p>
+      <p>Equivalently, \(w\) is \(\delta\)-close when some codeword <dfn>agrees</dfn> with it on a set \(S \subseteq L\) of size \(|S| \ge (1 - \delta)n\): <svg class="micro" viewBox="0 0 132 12" role="img" aria-label="16 cells, 13 green and 3 red"><g fill="currentColor"><rect class="c-green" x="0" width="7" height="12"/><rect class="c-green" x="8" width="7" height="12"/><rect class="c-red" x="16" width="7" height="12"/><rect class="c-green" x="24" width="7" height="12"/><rect class="c-green" x="32" width="7" height="12"/><rect class="c-green" x="40" width="7" height="12"/><rect class="c-green" x="48" width="7" height="12"/><rect class="c-red" x="56" width="7" height="12"/><rect class="c-green" x="64" width="7" height="12"/><rect class="c-green" x="72" width="7" height="12"/><rect class="c-green" x="80" width="7" height="12"/><rect class="c-red" x="88" width="7" height="12"/><rect class="c-green" x="96" width="7" height="12"/><rect class="c-green" x="104" width="7" height="12"/><rect class="c-green" x="112" width="7" height="12"/><rect class="c-green" x="120" width="7" height="12"/></g></svg> (the <span class="c-green">agreement set</span> \(S\), with the <span class="c-red">errors</span> outside it).</p>
+    </div>
+
+    <p>How far may a word drift before its codeword becomes ambiguous? Three thresholds answer this, and each one will matter. The <dfn>unique decoding radius</dfn> \(\tfrac{1-\rho}{2}\) is half the distance: two codewords cannot both lie within it, because their mutual distance is at least \(1-\rho\). The <dfn>Johnson radius</dfn> \(1 - \sqrt{\rho}\) is the radius up to which the Johnson bound (Theorem 1) guarantees short lists, for any code with this distance. The <dfn>capacity</dfn> \(1 - \rho\) is the limit for every code of rate \(\rho\): beyond it some words have exponentially long lists. Figure 4 places them for every rate.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-radii" aria-labelledby="cap-radii">
+    <div class="stage">
+      <canvas data-aspect="0.3" data-aspect-narrow="0.75" role="img" aria-label="A line from 0 to 1 with three marks: unique decoding radius, Johnson radius and capacity, for the selected rate."></canvas>
+      <div class="readout bottom" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>rate ρ <input id="radii-rho" type="range" min="1" max="12" value="4" step="1"><output for="radii-rho"></output></label>
+    </div>
+    <figcaption id="cap-radii"><b>Figure 4.</b> The three radii as fractions of the word. Below \(\tfrac{1-\rho}{2}\) a close word has one codeword; up to \(1 - \sqrt{\rho}\) it has a short list; towards \(1 - \rho\) lists can explode. Lowering the rate pushes every mark to the right.</figcaption>
+  </figure>
+
+  <section>
+    <p>For our code, \(\rho = 1/4\) gives \(\tfrac{1-\rho}{2} = 0.375\) (up to 6 errors out of 16), \(1 - \sqrt{\rho} = 0.5\) (fewer than 8) and \(1 - \rho = 0.75\) (fewer than 12). Figure 5 builds a word on the boundary between the first two regimes: it equals <span class="c-blue">\(f\)</span> on the points 1 to 8 and <span class="c-purple">\(g\)</span> on the points 9 to 16.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-list" aria-labelledby="cap-list">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="A word that is f on the left half and g on the right half, with every codeword within the chosen radius drawn as rings."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>radius (errors allowed) <input id="list-e" type="range" min="0" max="10" value="7"><output for="list-e"></output></label>
+    </div>
+    <figcaption id="cap-list"><b>Figure 5.</b> The word's list, found by trying the cubic through every 4 of its entries (any codeword within 12 errors is one of them). Within 6 errors only <span class="c-purple">\(g\)</span> fits (unique decoding). At 7 both <span class="c-blue">\(f\)</span> and \(g\) fit: past half the distance, "the nearest codeword" is no longer well defined, and a verifier must live with a list.</figcaption>
+  </figure>
+
+  <section>
+    <div class="env thm">
+      <p class="env-head">Theorem 1 (Johnson bound)</p>
+      <p>For every word \(w\) and every \(\eta \in (0, 1-\sqrt{\rho})\), \(\ \bigl|\mathrm{List}(w,\, 1 - \sqrt{\rho} - \eta)\bigr| \le \dfrac{1}{2\eta\sqrt{\rho}}\).</p>
+    </div>
+    <p>At 7 errors, \(\delta = 7/16\) and \(\eta = 1/2 - 7/16 = 1/16\), so the bound allows \(1/(2 \cdot \tfrac{1}{16} \cdot \tfrac12) = 16\) codewords; Figure 5 finds 2. The bound is loose, but it is a bound, and protocols that work in the list regime use it to count what a cheating prover could hide behind.</p>
+  </section>
+
+  <section>
+    <h2 id="snark"><span class="num">4</span>Why a SNARK tests closeness</h2>
+    <p>In a hash-based SNARK the prover encodes its witness polynomial \(p\) as the codeword \((p(x))_{x \in L}\), commits to it with a Merkle tree, and later answers queries with authentication paths. Figure 6 runs that exchange.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-merkle" aria-labelledby="cap-merkle">
+    <div class="stage">
+      <canvas data-aspect="0.45" data-aspect-narrow="0.95" role="img" aria-label="16 values hashed into a Merkle tree; the root is sent; one query is answered with its leaf and four sibling hashes."></canvas>
+    </div>
+    <figcaption id="cap-merkle"><b>Figure 6.</b> Committing fixes all 16 entries with one root. Opening one entry costs its leaf and \(\log_2 16 = 4\) <span class="c-yellow">sibling hashes</span>. The verifier sees only what it queries.</figcaption>
+  </figure>
+
+  <section>
+    <p>The obvious test would be: read some entries and check they lie on a polynomial of degree less than \(k\). Figure 7 shows why that test is useless below \(k + 1\) reads.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-local" aria-labelledby="cap-local">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="A random word; any four read values are matched by a cubic; only a fifth read can disagree."></canvas>
+    </div>
+    <figcaption id="cap-local"><b>Figure 7.</b> A random word, 10 entries away from its nearest codeword, passes any 4 reads: a cubic goes through any 4 values. Only the fifth read can fail. With \(k = 2^{20}\), a direct test needs a million reads.</figcaption>
+  </figure>
+
+  <section>
+    <p>So a Reed-Solomon proximity test needs help from the prover: extra committed words and a short interaction that shrink the problem. Such an interaction is an <dfn>interactive oracle proof of proximity</dfn> (IOPP).</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 3 (proximity test)</p>
+      <p>The verifier has <dfn>oracle access</dfn> to committed words: it reads them only at positions it queries. An IOPP for \(\mathcal{C}\) with proximity parameter \(\delta\) and soundness error \(\varepsilon\) is an interaction in which the verifier reads the committed word \(w\) only at a few positions, and:</p>
+      <ul>
+        <li><b>completeness:</b> if \(w \in \mathcal{C}\), the honest prover makes the verifier accept;</li>
+        <li><b>soundness:</b> if \(\Delta(w, \mathcal{C}) &gt; \delta\), every prover makes it accept with probability at most \(\varepsilon\).</li>
+      </ul>
+    </div>
+
+    <p>Words between "in the code" and "\(\delta\)-far" get no promise. That gap costs nothing, for two reasons. If \(\delta\) is below the unique decoding radius, a \(\delta\)-close word determines exactly one polynomial, and the rest of the SNARK argues about that polynomial. Above it, the word determines a short list (Theorem 1), and the protocol either proves its claims for every member of the list (<dfn>list binding</dfn>, as in leanVM) or adds a check that pins one member down (Section 8).</p>
+    <p>Closeness tests also carry claims about the polynomial. To prove \(p(z) = y\), the prover shows that the <dfn>quotient</dfn> \(q(x) = \dfrac{p(x) - y}{x - z}\) is close to a code of dimension \(k - 1\). If \(y = p(z)\) the division is exact and \(q\) is a polynomial of degree \(k - 2\). Otherwise \(q\) is not a polynomial at all. Figure 8 tries every claim \(y\) for \(z = 5\), where \(f(5) = 12\).</p>
+  </section>
+
+  <figure class="fig wide" id="fig-quot" aria-labelledby="cap-quot">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.05" role="img" aria-label="The quotient word for the claimed value y. At y = 12 it lies on a quadratic; any other y leaves it 12 errors from every quadratic."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>claimed y = f(5) <input id="quot-y" type="range" min="0" max="16" value="11"><output for="quot-y"></output></label>
+    </div>
+    <figcaption id="cap-quot"><b>Figure 8.</b> The quotient \((f(x) - y)/(x - 5)\) on the 15 points \(x \ne 5\). At the true value \(y = 12\) it is a <span class="c-green">codeword</span> of degree less than 3. Every false \(y\) leaves it 12 <span class="c-red">errors</span> from the nearest quadratic, the maximum possible since a quadratic fits any 3 points. A false evaluation claim becomes a far word.</figcaption>
+  </figure>
+
+  <details class="check">
+    <summary>Why can the distance in Figure 8 never exceed 12?</summary>
+    <div class="answer"><p>The code has dimension 3 on 15 points. Any 3 entries of the quotient are matched by some quadratic, so the nearest quadratic agrees on at least 3 points and differs on at most \(15 - 3 = 12\).</p></div>
+  </details>
+
+  <section>
+    <h2 id="fold"><span class="num">5</span>Folding, and the proximity gap</h2>
+    <p>Every proximity test shrinks its problem with the same move. Given two words \(\class{c-blue}{u}, \class{c-purple}{v}\), the verifier sends a random \(\class{c-yellow}{\alpha} \in \mathbb{F}\), and from then on only the single word
+    \[ \class{c-teal}{u + \alpha v} \]
+    is tested. A random linear combination of many words works the same way. Figure 9 introduces the compact drawing used from here on: a word as a strip of 16 cells, <span class="c-red">red</span> where it disagrees with its nearest codeword.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-combo" aria-labelledby="cap-combo">
+    <div class="stage">
+      <canvas data-aspect="0.32" data-aspect-narrow="0.82" role="img" aria-label="Three strips: u, v, and u + 3v computed cell by cell modulo 17."></canvas>
+    </div>
+    <figcaption id="cap-combo"><b>Figure 9.</b> The fold \(u + 3v\), cell by cell modulo 17. Here <span class="c-blue">\(u\)</span> is \(f\) with 3 errors and <span class="c-purple">\(v\)</span> is the codeword \(2 + x^2\) with errors at the same three points. The fold has its errors on that same set.</figcaption>
+  </figure>
+
+  <section>
+    <p>The fold is useful only if it is honest about its inputs: when \(u\) or \(v\) is far from the code, \(u + \alpha v\) should be far too. It cannot be far for every \(\alpha\) (at \(\alpha = 0\) it is \(u\) itself), so the right demand is <em>for almost every \(\alpha\)</em>. Figure 10 shows all 17 folds of three pairs.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-gap" aria-labelledby="cap-gap">
+    <div class="stage">
+      <canvas data-aspect="0.56" data-aspect-narrow="1.45" role="img" aria-label="Seventeen strips, one per alpha, each showing the errors of u + alpha v and its distance; a radius slider marks which folds count as close."></canvas>
+      <div class="readout bottom" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <span class="seg" role="group" aria-label="pair">
+        <button class="btn" type="button" data-case="corr" aria-pressed="true">correlated</button>
+        <button class="btn" type="button" data-case="sep" aria-pressed="false">separately close</button>
+        <button class="btn" type="button" data-case="far" aria-pressed="false">far</button>
+      </span>
+      <label>radius <input id="gap-e" type="range" min="0" max="10" value="3"><output for="gap-e"></output></label>
+    </div>
+    <figcaption id="cap-gap"><b>Figure 10.</b> Every fold \(u + \alpha v\), \(\alpha = 0, \dots, 16\), with its distance to the code; folds within the <span class="c-orange">radius</span> are framed. <b>Correlated</b>: every fold is within 3. <b>Separately close</b>: \(u\) and \(v\) are each within 2, yet only \(\alpha = 0\) gives a fold within 2. <b>Far</b>: no fold comes within 7. Each pair is either close for every \(\alpha\) or for few.</figcaption>
+  </figure>
+
+  <section>
+    <p>Figure 10 shows the shape of the main theorem. For a pair \((u, v)\), the set of \(\alpha\) with \(u + \alpha v\) \(\delta\)-close is either everything or almost nothing. There is a <em>gap</em> between the two.</p>
+    <p>Which pairs are close for every \(\alpha\)? Not merely pairs where \(u\) and \(v\) are each close: the separately close pair fails. They must be close <em>on the same set of positions</em>.</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 4 (correlated agreement)</p>
+      <p>Words \(u, v\) have <dfn>\(\delta\)-correlated agreement</dfn> with \(\mathcal{C}\) if there are codewords \(c_0, c_1\) and one set \(\class{c-green}{S} \subseteq L\) with \(|S| \ge (1-\delta)n\) such that \(u = c_0\) and \(v = c_1\) on \(S\).</p>
+    </div>
+
+    <p>If \(u, v\) have \(\delta\)-correlated agreement, then every fold agrees with the codeword \(c_0 + \alpha c_1\) on \(S\), so every fold is \(\delta\)-close. The theorem is the converse.</p>
+
+    <div class="env thm">
+      <p class="env-head">Theorem 2 (proximity gap and correlated agreement; BCIKS20, BCHKS25)</p>
+      <p>Let \(\mathcal{C} = \mathrm{RS}[\mathbb{F}, L, k]\) and \(\delta &lt; 1 - \sqrt{\rho}\). There is an \(\varepsilon\) such that for all \(u, v \in \mathbb{F}^L\):
+      \[ \Pr_{\class{c-yellow}{\alpha} \leftarrow \mathbb{F}}\Bigl[\, \Delta(\class{c-teal}{u + \alpha v}, \mathcal{C}) \le \class{c-orange}{\delta} \,\Bigr] &gt; \varepsilon \quad\Longrightarrow\quad u, v \text{ have } \delta\text{-correlated agreement.} \]
+      In the unique decoding regime \(\varepsilon\) is about \(n/|\mathbb{F}|\) (BCIKS20). Up to the Johnson radius BCIKS20 prove \(O(n^2/|\mathbb{F}|)\), and BCHKS25 improve it to \(a \cdot n/|\mathbb{F}|\), with \(a\) growing as \(\delta\) approaches \(1 - \sqrt{\rho}\).</p>
+    </div>
+
+    <p>Read contrapositively: if \(u\) or \(v\) is \(\delta\)-far (so they cannot have correlated agreement), the fold is \(\delta\)-far except with probability \(\varepsilon\). With \(n = 2^{22}\) and \(|\mathbb{F}| \approx 2^{128}\), \(\varepsilon\) is around \(2^{-100}\) or smaller. In \(\mathbb{F}_{17}\) it is useless (\(n/|\mathbb{F}| \approx 1\)). Drag Figure 10's radius to 8 on the far pair: two folds come within 8 errors. Radius 8 is \(\delta = 1/2\), the Johnson radius itself, where the theorem has stopped applying, so the toy fails both of its hypotheses there.</p>
+    <p>Where does the shared set come from? Figure 11 runs the easy half of the argument, which uses only two close folds and loses a factor of 2.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-twopt" aria-labelledby="cap-twopt">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.0" role="img" aria-label="Two close folds with different error sets; on the complement of their union, u and v are recovered as codewords."></canvas>
+    </div>
+    <figcaption id="cap-twopt"><b>Figure 11.</b> Two folds \(w_1 = u + 4v\) and \(w_2 = u + 2v\), each 2 errors from the code. Off the union of their error sets, both agree with codewords, so solving the two equations for \(u\) and \(v\) gives codewords there too. The pair has correlated agreement on a set of size \(n - 4\) at worst (here \(n - 3\)). The full theorem uses many \(\alpha\) to remove the factor 2.</figcaption>
+  </figure>
+
+  <section>
+    <div class="env ex">
+      <p class="env-head">Example 1 (the algebra of Figure 11)</p>
+      <ol class="steps">
+        <li><span>On \(S\), \(w_1 = c'_1\) and \(w_2 = c'_2\) for codewords \(c'_1, c'_2\).</span></li>
+        <li><span>Subtract: \(w_1 - w_2 = (4 - 2)v\), so on \(S\), \(v = \tfrac{1}{2}(c'_1 - c'_2)\), a codeword because the code is linear.</span></li>
+        <li><span>Then \(u = w_1 - 4v = c'_1 - 2(c'_1 - c'_2)\) on \(S\), also a codeword.</span></li>
+        <li><span>Check: \(S\) avoids the error sets \(\{8, 12\}\) and \(\{3, 12\}\), so \(|S| = 16 - 3 = 13\), and \(u, v\) agree with \(f\) and \(2 + x^2\) on those 13 points.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="mca"><span class="num">6</span>Correlated and mutual correlated agreement</h2>
+    <p>Correlated agreement is about one set shared by both words. Figure 12 shows what goes wrong when the sets differ.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-union" aria-labelledby="cap-union">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.0" role="img" aria-label="When u and v have errors in different places, their fold has errors in the union; when they share positions, the fold's errors stay in that shared set."></canvas>
+    </div>
+    <figcaption id="cap-union"><b>Figure 12.</b> Errors of a fold land on the union of the inputs' error positions. Separately close words with different error sets give a fold twice as far; correlated words keep their fold's errors inside the shared set.</figcaption>
+  </figure>
+
+  <section>
+    <p>Correlated agreement says <em>some</em> set works. Protocols in the list regime need more: they keep track of which codeword a word is close to, and on which positions. Look again at the correlated pair of Figure 10: most folds are 3 errors away, but \(\alpha = 2, 4, 14\) give folds only 2 away. Figure 13 explains them.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-cancel" aria-labelledby="cap-cancel">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.05" role="img" aria-label="A table of the fold's error e_u + alpha e_v at the three error points, for alpha from 0 to 16; each row has exactly one zero."></canvas>
+    </div>
+    <figcaption id="cap-cancel"><b>Figure 13.</b> At an error point \(x\), the fold's error is \(e_u(x) + \alpha\, e_v(x)\), a non-constant line in \(\alpha\), so (as \(e_v(x) \ne 0\) here) it vanishes for exactly one <span class="c-yellow">\(\alpha\)</span>. At those three values the fold agrees with the code at a point where \(u\) and \(v\) do not: its agreement set is bigger than theirs.</figcaption>
+  </figure>
+
+  <section>
+    <p>At \(\alpha = 4\) the fold agrees with \(c_0 + 4c_1\) on 14 points, including \(x = 3\), where \(u\) is wrong. A verifier that later relies on "the fold agrees with its codeword on this set" would be relying on positions where the committed words do not agree. Such \(\alpha\) must be rare, and that is the next definition.</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 5 (mutual correlated agreement; ACFY24)</p>
+      <p>The code has <dfn>mutual correlated agreement</dfn> (MCA) with error \(\varepsilon\) at radius \(\delta\) if for all \(u, v \in \mathbb{F}^L\):
+      \[ \Pr_{\class{c-yellow}{\alpha}}\left[\ \exists\, \class{c-green}{S},\ |S| \ge (1-\delta)n:\ \begin{array}{l} \class{c-teal}{u + \alpha v} \text{ agrees with a codeword on } S, \text{ and} \\ (u, v) \text{ do not agree with a pair of codewords on } S \end{array} \right] \le \varepsilon. \]</p>
+    </div>
+
+    <p>Correlated agreement asks for one good set when many folds are close. MCA asks that <em>every</em> set on which the fold agrees be a set on which \(u\) and \(v\) agree, for all but an \(\varepsilon\) fraction of \(\alpha\). In Figure 13 the bad \(\alpha\) are the cancellations: one per error point, at most \(\delta n\) of them, which is the shape of the unique-decoding bound \((\delta n + 1)/|\mathbb{F}|\). Up to the Johnson radius, MCA for Reed-Solomon codes is a theorem of BCHKS25, with the same \(a \cdot n / |\mathbb{F}|\) error as Theorem 2.</p>
+    <p>MCA gives the property a list-tracking protocol needs.</p>
+
+    <div class="env thm">
+      <p class="env-head">Lemma 1 (folding preserves lists)</p>
+      <p>If the code has MCA with error \(\varepsilon\) at radius \(\delta\), then for every pair \((u, v)\), except with probability \(\varepsilon\) over \(\alpha\):
+      \[ \mathrm{List}(\class{c-teal}{u + \alpha v},\ \delta) \;=\; \bigl\{\, c_0 + \alpha c_1 \;:\; (c_0, c_1) \in \mathrm{List}((u, v),\ \delta) \,\bigr\}, \]
+      where \(\mathrm{List}((u, v), \delta)\) is the set of codeword pairs that agree with \((u, v)\) on one common set of size at least \((1 - \delta)n\).</p>
+    </div>
+
+    <p>The fold's list is exactly the fold of the pair's list: no codeword appears from nowhere. Figure 14 shows the failure this rules out. It needs the toy field and the radius 8, at the edge of the Johnson range, where no guarantee holds.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-newcw" aria-labelledby="cap-newcw">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.1" role="img" aria-label="A far pair whose fold at alpha 11 agrees with a cubic on 8 points, although u and v jointly agree with the code on at most 5."></canvas>
+    </div>
+    <figcaption id="cap-newcw"><b>Figure 14.</b> The far pair of Figure 10 at \(\alpha = 11\). The <span class="c-teal">fold</span> agrees with the cubic \(16 + x + 2x^2 + 13x^3\) on 8 points, yet \(u\) and \(v\) jointly agree with codewords on at most 5. That cubic is a new list member, the fold of nothing. In \(\mathbb{F}_{17}\) at radius 8 this happens for 2 of 17 values of \(\alpha\). Inside the Johnson range and over a 128-bit field, MCA makes it negligible.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="fri"><span class="num">7</span>FRI: halve, fold, repeat</h2>
+    <p>FRI (Ben-Sasson, Bentov, Horesh, Riabzev, 2018) tests proximity to \(\mathrm{RS}[\mathbb{F}, L, k]\) by turning one word into a pair of half-length words and folding them. The domain must be closed under negation: with \(L = \{1, \dots, 16\}\), each \(x\) pairs with \(-x = 17 - x\), and both have the same square.</p>
+
+    <figure class="fig" id="fig-split" aria-labelledby="cap-split">
+      <div class="stage scrollx">
+        <svg class="plot" viewBox="0 0 640 190" role="img" aria-label="The 16 points paired as x and 17 minus x, each pair mapping to its square." style="min-width:520px"></svg>
+      </div>
+      <figcaption id="cap-split"><b>Figure 15.</b> The 16 points form 8 pairs \(\{x, -x\}\), and squaring sends each pair to one point of \(L^2 = \{1, 2, 4, 8, 9, 13, 15, 16\}\). Halving the domain this way needs a domain closed under \(x \mapsto -x\), such as a multiplicative subgroup of order \(2^j\).</figcaption>
+    </figure>
+
+    <p>Split any polynomial into its even and odd parts:
+    \[ f(x) \;=\; \underbrace{f_e(x^2)}_{\text{even powers}} \;+\; x\,\underbrace{f_o(x^2)}_{\text{odd powers}}, \qquad \deg f_e,\ \deg f_o &lt; k/2. \]
+    For our \(f = 3 + x + 4x^2 + x^3\): \(f_e(y) = 3 + 4y\) and \(f_o(y) = 1 + y\). Each value of \(f_e\) and \(f_o\) is read off from the pair \(f(x), f(-x)\):
+    \[ f_e(x^2) = \frac{f(x) + f(-x)}{2}, \qquad f_o(x^2) = \frac{f(x) - f(-x)}{2x}. \]
+    The fold with challenge \(\class{c-yellow}{\alpha}\) is \(\class{c-teal}{f_1} = f_e + \alpha f_o\), a word on \(L^2\) of half the length and half the degree bound. (The division by 2 needs odd characteristic; binary-field systems such as leanVM fold with an additive variant.) Figure 16 runs FRI on the running example.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-fri" aria-labelledby="cap-fri">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.6" role="img" aria-label="FRI on f: 16 values fold with alpha 5 into 8 values on a line, which fold with beta 3 into 4 equal values."></canvas>
+    </div>
+    <figcaption id="cap-fri"><b>Figure 16.</b> FRI's commit phase. Folding with \(\alpha = 5\) gives \(f_1 = 8 + 9y\) on 8 points; folding with \(\beta = 3\) gives the constant 1 on 4 points. Each round halves the length and the degree bound, so the rate stays \(1/4\). After \(\log_2 k = 2\) rounds the prover sends the last word in the clear.</figcaption>
+  </figure>
+
+  <section>
+    <p>The verifier never reads the folded words in full. In the <dfn>query phase</dfn> it picks a random \(x\), reads \(f(x)\) and \(f(-x)\), computes what \(f_1(x^2)\) should be, and compares with the committed \(f_1\), all the way down. Figure 17 runs it against a prover whose word is \(f\) with one wrong entry.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-friq" aria-labelledby="cap-friq">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="1.6" role="img" aria-label="Two FRI queries against a word with one wrong entry: the query at x = 5 is consistent, the query at x = 3 exposes the lie."></canvas>
+    </div>
+    <figcaption id="cap-friq"><b>Figure 17.</b> The prover changed \(f(3)\) from 1 to 7 and committed the honest-looking \(f_1 = 8 + 9y\). A query at \(x = 5\) checks out. A query at \(x = 3\) computes \(f_1(9) = 12\) from the word but finds 4 committed. Only queries landing on the pair \(\{3, 14\}\), 2 points in 16, can catch this word, and that is fine: it is \(1/16\)-close, so FRI owes it nothing.</figcaption>
+  </figure>
+
+  <section>
+    <p>Why is FRI sound? Suppose \(f\) is \(\delta\)-far. View it as the pair \((f_e, f_o)\) on \(L^2\): a pair agreeing with codewords on a set \(S' \subseteq L^2\) would make \(f\) agree with a codeword on the \(2|S'|\) square roots of \(S'\), so the pair has no \(\delta\)-correlated agreement. By Theorem 2, the <em>true</em> fold \(f_e + \alpha f_o\) is \(\delta\)-far except with probability \(\varepsilon\). The prover's committed \(f_1\) either equals that true fold almost everywhere, so \(f_1\) is far and the argument repeats one layer down, or it differs from the true fold on many positions. The last word is checked directly and is a codeword, so somewhere down the chain a committed word differs from the true fold of the word above on about a \(\delta\) fraction of positions or more. One query walks the whole chain \(x \to x^2 \to x^4 \to \cdots\), checking every layer, and lands on such a position with probability about \(\delta\) or more. With \(t\) queries,</p>
+    \[ \Pr[\text{accept a } \delta\text{-far word}] \;\lesssim\; \underbrace{\log_2 k \cdot \varepsilon}_{\text{an unlucky fold}} \;+\; \underbrace{(1 - \class{c-orange}{\delta})^{t}}_{\text{all queries miss}}. \]
+    <p>The first term is the proximity gap; the second is Figure 1. A protocol has <dfn>\(\lambda\) bits of security</dfn> when this total is at most \(2^{-\lambda}\). The larger the provable \(\delta\), the fewer queries: this is why it matters how far towards \(1 - \sqrt{\rho}\) (or beyond) the gap theorems reach.</p>
+  </section>
+
+  <section>
+    <h2 id="whir"><span class="num">8</span>WHIR: fold with a sumcheck, shrink the rate</h2>
+    <p>FRI tests proximity only. A polynomial commitment also has to prove an evaluation, and FRI-based schemes pay for that with the quotient of Figure 8. WHIR (Arnon, Chiesa, Fenzi, Yogev, 2024) folds the evaluation claim and the proximity test together, and makes each round cheaper than the last.</p>
+    <p>WHIR views the \(k = 2^m\) coefficients of \(f\) as a multilinear polynomial \(\hat f\) in \(m\) variables (coefficient \(c_i\) goes with the monomial whose exponents are the bits of \(i\)), so FRI's fold \(f_e + \alpha f_o\) is \(\hat f\) with its first variable set to \(\alpha\). (A <dfn>multilinear</dfn> polynomial has degree at most 1 in each variable; the two views agree through \(p(z) = \hat f(z, z^2, z^4, \dots)\).) The object tested is a code with a constraint attached.</p>
+
+    <div class="env def">
+      <p class="env-head">Definition 6 (constrained Reed-Solomon code)</p>
+      <p>For a weight function \(\hat w\) and a target \(\sigma \in \mathbb{F}\),
+      \[ \mathrm{CRS}[\mathbb{F}, L, m, \hat w, \sigma] = \Bigl\{\, f \in \mathrm{RS}[\mathbb{F}, L, 2^m] \;:\; \sum_{b \in \{0,1\}^m} \hat w\bigl(\hat f(b), b\bigr) = \sigma \,\Bigr\}. \]
+      The evaluation claim \(\hat f(z) = y\) at a point \(z \in \mathbb{F}^m\) is the case \(\hat w(Y, b) = \mathrm{eq}(z, b)\cdot Y\), \(\sigma = y\), where \(\mathrm{eq}(z, b) = \prod_i \bigl(z_i b_i + (1 - z_i)(1 - b_i)\bigr)\) is the multilinear polynomial in \(z\) that equals \([z = b]\) on \(\{0,1\}^m\), so the sum is the value \(\hat f(z)\).</p>
+    </div>
+
+    <p>The <dfn>sumcheck protocol</dfn> proves a claim about a sum over \(\{0,1\}^m\) one variable at a time: in each round the prover sends the sum as a low-degree polynomial in the first remaining variable, the verifier checks it against the current claim and answers with a random challenge \(\alpha_i\), and the claim becomes one about a sum over one fewer variable, with that variable fixed to \(\alpha_i\). Fixing a variable of \(\hat f\) is exactly a fold, so the sumcheck and the proximity test advance together. Figure 18 plays one WHIR round at realistic size.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-whir" aria-labelledby="cap-whir">
+    <div class="stage">
+      <canvas data-aspect="0.5" data-aspect-narrow="1.35" role="img" aria-label="One WHIR round: sumcheck folds four variables, the prover commits a word on a half-size domain at rate 1/16, an out-of-domain sample and shift queries become constraints, combined into one."></canvas>
+    </div>
+    <figcaption id="cap-whir"><b>Figure 18.</b> One WHIR round with \(m = 24\), rate \(1/2\), fold factor 4. Four sumcheck challenges fold \(2^{24}\) coefficients to \(2^{20}\); the new word lives on a domain half as long, so the rate drops from \(1/2\) to \(1/16\). An out-of-domain point and the shift queries become new constraints, and one random combination makes them a single constrained-code claim for the next round.</figcaption>
+  </figure>
+
+  <section>
+    <p>Three ingredients of the round lean on Section 6.</p>
+    <ul>
+      <li><b>The sumcheck fold tracks a codeword, not just a distance.</b> The constraint is about \(\hat f\), the polynomial behind a specific list member, so after folding the verifier needs every member of the new list to be the fold of an old one. That is Lemma 1, and it is why WHIR needs MCA where FRI needs only correlated agreement.</li>
+      <li><b>The out-of-domain sample</b> asks for the value of \(g\)'s polynomial at a random field point \(z\) outside \(L\). Distinct list members are distinct polynomials of degree less than \(k\), so at most one of them agrees with the answer, except with probability about \(\binom{|\mathrm{List}|}{2} k / |\mathbb{F}|\) (a multilinear point in \(\mathbb{F}^m\), as in leanVM, gives \(m/|\mathbb{F}|\) instead of \(k/|\mathbb{F}|\)). The list collapses to one candidate.</li>
+      <li><b>The shift queries</b> are FRI's queries in WHIR form: they read \(t\) blocks of the old word, fold each locally (16 values for fold factor 4) and demand that the new word match at the corresponding point: \(t\) more constraints, so a far word fails one with probability about \(1 - (1-\delta)^t\).</li>
+    </ul>
+    <p>The query count depends on the rate through \(\delta \to 1 - \sqrt{\rho}\). FRI's rate never changes, so every layer needs the full count. WHIR's rate falls each round, so its counts fall too. Figure 19 compares them at 100 bits.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-queries" aria-labelledby="cap-queries">
+    <div class="stage">
+      <canvas data-aspect="0.45" data-aspect-narrow="0.95" role="img" aria-label="Queries per committed word at 100 bits: FRI 200 for each of 24 layers, WHIR 200, 50, 29, 20, 16, 13 for six rounds."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <figcaption id="cap-queries"><b>Figure 19.</b> Queries per committed word for \(m = 24\), starting rate \(1/2\), 100 bits, with \(\delta\) taken in the limit \(1 - \sqrt{\rho}\) (real parameters keep a slack \(\eta\) below it) and the \(\varepsilon\) terms ignored. FRI keeps rate \(1/2\) and needs 200 queries in each of its 24 layers. WHIR folds by \(2^4\) per round and needs 200, then 50, 29, 20, 16, 13: far fewer Merkle paths.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="sizes"><span class="num">9</span>The real sizes</h2>
+    <p>Two numbers set a deployment's cost: the radius \(\delta\) the theorems allow, which fixes the query count, and the field size, which fixes \(\varepsilon\). Figure 20 plots the first.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-tcount" aria-labelledby="cap-tcount">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="0.95" role="img" aria-label="Queries needed for 100 bits as a function of the radius, with the three radii marked for the chosen rate."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>rate ρ <input id="t-rho" type="range" min="1" max="4" value="2"><output for="t-rho"></output></label>
+    </div>
+    <figcaption id="cap-tcount"><b>Figure 20.</b> Queries \(t = \lceil 100 / \log_2 \tfrac{1}{1-\delta} \rceil\) for 100 bits. At rate \(1/4\): 148 queries in the unique decoding regime, 100 at the Johnson radius, 50 at capacity. The capacity mark assumes gaps that were only conjectured and, near capacity, have since been shown to fail.</figcaption>
+  </figure>
+
+  <section>
+    <p>For a long time, implementations chose parameters from the conjecture that gaps hold all the way to capacity. In late 2025 Crites and Stewart showed the up-to-capacity conjectures false, and later work exhibited explicit failing lines close to capacity. The Johnson-regime theorems (BCIKS20, BCHKS25) are proven, so conservative systems, leanVM among them, stay below \(1 - \sqrt{\rho}\) and pay for it in queries.</p>
+    <p>The second number is \(\varepsilon\). Figure 21 shows \(-\log_2 \varepsilon\) for both regimes as the field grows.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-eps" aria-labelledby="cap-eps">
+    <div class="stage">
+      <canvas data-aspect="0.42" data-aspect-narrow="0.95" role="img" aria-label="Bits of security from the proximity gap error as a function of field size, unique decoding and Johnson regimes."></canvas>
+      <div class="readout" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <label>length n = 2^<input id="eps-n" type="range" min="10" max="30" value="22"><output for="eps-n"></output></label>
+    </div>
+    <figcaption id="cap-eps"><b>Figure 21.</b> Bits \(-\log_2 \varepsilon\) for a rate-\(1/2\) code, unique decoding \(\varepsilon = (\delta n + 1)/|\mathbb{F}|\) and Johnson \(\varepsilon\) from BCHKS25 Theorem 4.6 with slack \(\eta = 0.05\). A 31-bit field gives at most about 11 bits; the folding challenges must come from an <dfn>extension field</dfn> (a larger field built on top of the base field) of about 128 bits.</figcaption>
+  </figure>
+
+  <section>
+    <h2 id="whole"><span class="num">10</span>The whole picture</h2>
+    <p>Figure 22 replays a proximity proof end to end, naming the fact each step rests on.</p>
+  </section>
+
+  <figure class="fig wide" id="fig-whole" aria-labelledby="cap-whole">
+    <div class="stage">
+      <canvas data-aspect="0.3" data-aspect-narrow="1.25" role="img" aria-label="Summary: a claim becomes a committed word; folds shrink it; queries check consistency; each step labelled with the theorem it uses."></canvas>
+    </div>
+    <figcaption id="cap-whole"><b>Figure 22.</b> A claim about a polynomial becomes a committed word (Section 4), random folds shrink it while far stays far (Theorem 2) and lists stay lists (Lemma 1), and a few queries catch the inconsistency a far word forces (Section 7).</figcaption>
+  </figure>
+
+  <section>
+    <h3>What to remember</h3>
+    <p>A verifier that reads a few entries can only distinguish codewords from words that are far from every codeword, so hash-based SNARKs prove closeness, and closeness suffices because a close word determines one polynomial or a short list.</p>
+    <p>A random fold \(u + \alpha v\) is close for almost no \(\alpha\) or for every \(\alpha\), and the second case happens only when \(u\) and \(v\) agree with codewords on one shared set. That is the proximity gap and correlated agreement.</p>
+    <p>Mutual correlated agreement says more: every set on which the fold agrees with the code is a set on which \(u\) and \(v\) do. It makes the fold's list the fold of the list, which protocols that track a codeword, like WHIR, require.</p>
+    <p>FRI folds to halve the degree at constant rate. WHIR folds through a sumcheck that carries the evaluation claim, lowers the rate every round, and needs fewer queries as it goes.</p>
+    <p>The radius sets the query count, the field sets \(\varepsilon\). The gap theorems are proven up to the Johnson radius \(1 - \sqrt{\rho}\) and fail near capacity.</p>
+  </section>
+
+  <footer class="refs">
+    <p><b>Further reading</b></p>
+    <ol>
+      <li>E. Ben-Sasson, D. Carmon, Y. Ishai, S. Kopparty, S. Saraf, <a href="https://eprint.iacr.org/2020/654">Proximity Gaps for Reed-Solomon Codes</a> (BCIKS20). Theorems 1.4 to 1.6 are Theorem 2 here; Section 8 analyses FRI with them.</li>
+      <li>G. Arnon, A. Chiesa, G. Fenzi, E. Yogev, <a href="https://eprint.iacr.org/2024/1586">WHIR: Reed-Solomon Proximity Testing with Super-Fast Verification</a> (ACFY24). Section 4 defines mutual correlated agreement; Section 5 is the protocol of Figure 18.</li>
+      <li>E. Ben-Sasson, I. Bentov, Y. Horesh, M. Riabzev, <a href="https://eccc.weizmann.ac.il/report/2017/134/">Fast Reed-Solomon Interactive Oracle Proofs of Proximity</a> (FRI, ICALP 2018).</li>
+      <li>G. Arnon, A. Chiesa, G. Fenzi, E. Yogev, <a href="https://eprint.iacr.org/2024/390">STIR: Reed-Solomon Proximity Testing with Fewer Queries</a>. The rate-lowering idea and the out-of-domain sample that WHIR inherits.</li>
+      <li>E. Ben-Sasson, D. Carmon, U. Haböck, S. Kopparty, S. Saraf, Proximity Gaps in Interleaved Codes (BCHKS25). Theorem 4.6 is MCA up to the Johnson radius with error linear in \(n\).</li>
+      <li>E. Crites, A. Stewart, <a href="https://eprint.iacr.org/2025/2046">On Reed-Solomon Proximity Gaps Conjectures</a> (ePrint 2025/2046), and <a href="https://eprint.iacr.org/2026/782">Failure of proximity gaps close to capacity</a> (ePrint 2026/782).</li>
+      <li>V. Guruswami, A. Rudra, M. Sudan, <i>Essential Coding Theory</i>, chapters 5 (Reed-Solomon codes) and 7 (the Johnson bound).</li>
+      <li>The leanVM specification, Annex B: a self-contained WHIR/Ligerito soundness proof in the Johnson regime built on these lemmas.</li>
+    </ol>
+  </footer>
+</main>
+<script>
+/* ================= figure runtime (keep; extend per page) ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const tok = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Every figure registers a redraw so a theme switch repaints canvases with the new tokens.
+const redrawers = new Set();
+const redrawAll = () => redrawers.forEach(f => f());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Hi-DPI canvas that tracks its CSS width; height = width * data-aspect
+// (data-aspect-narrow below 560px, so a figure stays large on a phone).
+function canvasFig(canvas, draw) {
+  const ctx = canvas.getContext('2d');
+  const state = { ctx, w: 0, h: 0 };
+  const paint = () => { ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, state.w, state.h); draw(state); };
+  const resize = () => {
+    const w = canvas.clientWidth; if (!w) return;
+    const aspect = parseFloat((w < 560 && canvas.dataset.aspectNarrow) || canvas.dataset.aspect || '0.6');
+    const h = Math.round(w * aspect);
+    canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * devicePixelRatio); canvas.height = Math.round(h * devicePixelRatio);
+    state.w = w; state.h = h; paint();
+  };
+  new ResizeObserver(resize).observe(canvas);
+  redrawers.add(paint);
+  resize();
+  return paint;
+}
+
+// rAF loop that runs only while its figure is on screen and playing.
+function loop(el, tick) {
+  let on = false, visible = false, last = 0, id = 0;
+  const frame = t => { const dt = Math.min(0.05, (t - last) / 1000 || 0); last = t; if (tick(dt) === false) api.stop(); else id = requestAnimationFrame(frame); };
+  const sync = () => { cancelAnimationFrame(id); if (on && visible) { last = performance.now(); id = requestAnimationFrame(frame); } };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; sync(); }).observe(el);
+  const api = { start() { on = true; sync(); }, stop() { on = false; sync(); el.dispatchEvent(new Event('loopstop')); }, get running() { return on; } };
+  return api;
+}
+
+// Step-through controller: Reset / ← / Play / → buttons, plus keyboard ←/→ when the figure has focus.
+function stepper(fig, { count, render, interval = 900 }) {
+  let i = 0, timer = 0;
+  const btn = a => $(`[data-act="${a}"]`, fig);
+  const play = btn('play');
+  const show = () => {
+    const n = count();
+    i = Math.max(0, Math.min(i, n));
+    render(i, n);
+    btn('prev').disabled = i === 0; btn('next').disabled = i === n;
+  };
+  const stop = () => { clearInterval(timer); timer = 0; play.setAttribute('aria-pressed', 'false'); play.textContent = 'Play'; };
+  const go = d => { i += d; show(); };
+  btn('prev').onclick = () => { stop(); go(-1); };
+  btn('next').onclick = () => { stop(); go(1); };
+  btn('reset').onclick = () => { stop(); i = 0; show(); };
+  play.onclick = () => {
+    if (timer) return stop();
+    if (i >= count()) i = 0;
+    play.setAttribute('aria-pressed', 'true'); play.textContent = 'Pause';
+    if (reducedMotion.matches) { i = count(); show(); return stop(); }
+    show();
+    timer = setInterval(() => { if (i >= count()) return stop(); go(1); }, interval);
+  };
+  fig.addEventListener('keydown', e => {
+    if (e.target.matches('input')) return;
+    if (e.key === 'ArrowRight') { stop(); go(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { stop(); go(-1); e.preventDefault(); }
+  });
+  return { show, reset() { stop(); i = 0; show(); }, get i() { return i; } };
+}
+
+// Range input bound to its <output>.
+function range(input, onInput, fmt = v => v) {
+  const out = input.parentElement.querySelector('output');
+  const upd = () => { if (out) out.textContent = fmt(+input.value); onInput(+input.value); };
+  input.addEventListener('input', upd);
+  upd();
+}
+
+// Draggable SVG element in viewBox coordinates; also arrow-key movable.
+function draggable(svg, el, onMove, step = 10) {
+  const toSvg = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing'; e.preventDefault(); });
+  el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) { const p = toSvg(e); onMove(p.x, p.y); } });
+  el.addEventListener('pointerup', () => { el.style.cursor = 'grab'; });
+  el.addEventListener('keydown', e => {
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (d) { e.preventDefault(); onMove(+el.getAttribute('cx') + d[0], +el.getAttribute('cy') + d[1]); }
+  });
+}
+
+const typeset = el => window.MathJax?.typesetPromise ? MathJax.typesetPromise([el]) : Promise.resolve();
+
+/* ================= Scene: a small Manim-style animation engine =================
+   A scene is a list of objects plus a timeline of property tweens grouped into "beats".
+   The frame at time t is a pure function of t, so the timeline can be scrubbed, replayed,
+   stepped beat by beat and rebuilt when a parameter changes.
+
+     const sc = new Scene('#fig-x', { x: [-1, 10], y: [-1, 6], equal: true }, (sc, P) => {
+       const a = sc.add(Dot({ x: 1, y: 1, color: 'blue', opacity: 0, tag: 'a' }));
+       const l = sc.add(Line({ x1: 1, y1: 1, x2: 5, y2: 3, color: 'yellow', draw: 0 }));
+       sc.play('Place the point a.', [fadeIn(a)]);
+       sc.play('Draw the segment from a.', [create(l)], 1.2);
+       sc.play('Slide a along it.', [to(a, { x: 5, y: 3 })]);
+     });
+
+   World coordinates have y pointing up. Sizes r and width are in CSS pixels; R (circle) is in
+   world units. Colours are token names ('blue', 'muted', 'fg') or literal CSS colours.
+
+   Phones: options may be a function of `narrow` (canvas under 560px), and build() can read
+   sc.narrow to stack the layout vertically. Crossing the breakpoint rebuilds the scene. */
+
+const ease = {
+  smooth: t => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2,
+  linear: t => t,
+  out: t => 1 - (1 - t) ** 3,
+  there: t => Math.sin(Math.PI * t),           // 0 → 1 → 0, for indicate()
+};
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+const colorCache = new Map();
+function rgb(c) {
+  const css = /^(#|rgb|hsl)/.test(c) ? c : tok(c);
+  if (colorCache.has(css)) return colorCache.get(css);
+  const cv = document.createElement('canvas').getContext('2d');
+  cv.fillStyle = '#000'; cv.fillStyle = css;
+  const s = cv.fillStyle;   // normalised to #rrggbb or rgba(...)
+  const v = s[0] === '#' ? [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+  colorCache.set(css, v); return v;
+}
+redrawers.add(() => colorCache.clear());
+const isColor = v => typeof v === 'string' && v !== '' && !/^\d/.test(v);
+function mix(a, b, p) {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * p;
+  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) return a.map((x, i) => mix(x, b[i], p));
+  if (isColor(a) && isColor(b) && a !== b) {
+    if (p <= 0) return a; if (p >= 1) return b;
+    const [x, y] = [rgb(a), rgb(b)];
+    return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * p)).join(',')})`;
+  }
+  return p < 1 ? a : b;   // strings, booleans: switch at the end
+}
+const paintColor = c => (/^(#|rgb|hsl)/.test(c) ? c : tok(c));
+
+class Scene {
+  static all = new Map();
+  constructor(fig, opts, build) {
+    this.fig = typeof fig === 'string' ? $(fig) : fig;
+    this.canvas = $('canvas', this.fig);
+    this.optsIn = opts; this.narrow = this.canvas.clientWidth < 560; this.#layout();
+    this.build = build; this.params = {};
+    this.t = 0; this.playing = false; this.focus = null;
+    this.ctx = this.canvas.getContext('2d');
+    Scene.all.set(this.fig.id, this);
+    if (this.optsIn.controls === false || (typeof opts === 'function' && opts(false).controls === false)) this.#bareControls(); else this.#controls();
+    this.#measure();
+    this.rebuild();
+    new ResizeObserver(() => this.#resize()).observe(this.canvas);
+    new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; if (!this.visible) this.pause(); }).observe(this.fig);
+    redrawers.add(() => this.render());
+    this.#resize();
+  }
+
+  #layout() { this.opts = { x: [0, 10], y: [0, 6], equal: false, pad: 24, rest: 'end', ...(typeof this.optsIn === 'function' ? this.optsIn(this.narrow) : this.optsIn) }; }
+
+  /* ---- building ---- */
+  // New params restart at the resting frame; a plain rebuild (resize, fonts ready) keeps the current time.
+  rebuild(params) {
+    const keep = !params && this.objs;
+    Object.assign(this.params, params);
+    this.objs = []; this.tracks = []; this.beats = []; this.T = 0;
+    this.build(this, this.params);
+    if (!this.beats.length) this.beats.push({ label: '', t0: 0, t1: 0 });
+    this.scrub.max = Math.max(1, Math.round(this.T * 100));
+    this.seek(keep ? this.t : this.opts.rest === 'end' ? this.T : this.opts.rest);
+  }
+  // Rebuild with new params and play the whole (short) timeline: lets an instrument animate a change.
+  animateTo(params) { this.rebuild(params); this.stopAt = this.T; this.playFrom(0); }
+  add(o) { o.opacity ??= 1; o.init = { ...o }; this.objs.push(o); return o; }
+  addAll(list) { return list.map(o => this.add(o)); }
+  play(label, anims, dur = 1, e = ease.smooth) {
+    const t0 = this.T;
+    anims.flat(Infinity).forEach(a => a(this, t0, dur, e));
+    this.beats.push({ label, t0, t1: t0 + dur });
+    this.T += dur;
+  }
+  wait(dur = .6) { this.T += dur; if (this.beats.length) this.beats.at(-1).t1 = this.T; }
+  valueAt(o, prop, t) {
+    let v = o.init[prop];
+    for (const k of this.tracks) if (k.o === o && k.prop === prop && t >= k.t0) v = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return v;
+  }
+  track(o, prop, t0, t1, value) { this.tracks.push({ o, prop, t0, t1, value }); }
+
+  /* ---- coordinates ---- */
+  #resize() {
+    const w = this.canvas.clientWidth; if (!w || w === this.w) return;
+    this.#measure();
+    this.rebuild();      // layouts may depend on sc.narrow and on pixel sizes (texRow), so rebuild at the new size
+  }
+  #measure() {
+    const c = this.canvas, w = c.clientWidth || c.parentElement.clientWidth || 640;
+    if ((w < 560) !== this.narrow) { this.narrow = w < 560; this.#layout(); }
+    const h = Math.round(w * parseFloat((w < 560 && c.dataset.aspectNarrow) || c.dataset.aspect || '0.6'));
+    c.style.height = h + 'px'; c.width = Math.round(w * devicePixelRatio); c.height = Math.round(h * devicePixelRatio);
+    this.w = w; this.h = h;
+    const { x: [x0, x1], y: [y0, y1], pad } = this.opts;
+    let sx = (w - 2 * pad) / (x1 - x0), sy = (h - 2 * pad) / (y1 - y0);
+    if (this.opts.equal) sx = sy = Math.min(sx, sy);
+    this.sx = sx; this.sy = sy;
+    this.ox = (w - sx * (x1 - x0)) / 2 - sx * x0;
+    this.oy = (h + sy * (y1 - y0)) / 2 + sy * y0;
+  }
+  X(x) { return this.ox + this.sx * x; }
+  Y(y) { return this.oy - this.sy * y; }
+
+  /* ---- time ---- */
+  stateAt(t) {
+    const s = new Map(this.objs.map(o => [o, { ...o.init }]));
+    for (const k of this.tracks) if (t >= k.t0) s.get(k.o)[k.prop] = k.value(clamp01((t - k.t0) / (k.t1 - k.t0 || 1)));
+    return s;
+  }
+  // The beat whose interval (t0, t1] holds t. At a boundary the beat that just finished wins, so a scene resting
+  // after beat k shows beat k's label, never the next one's.
+  beatAt(t) { let i = 0; this.beats.forEach((b, k) => { if (t > b.t0 + 1e-6) i = k; }); return i; }
+  seek(t) {
+    this.t = Math.max(0, Math.min(this.T, t));
+    this.scrub.value = Math.round(this.t * 100);
+    this.#showBeat(this.beatAt(this.t));
+    this.render();
+  }
+  // The step log lists every beat already played, numbered, with the current one highlighted,
+  // so the reader keeps the whole story so far in view. Future beats stay hidden.
+  #showBeat(i) {
+    if (this.label.textContent !== this.beats[i].label) this.label.textContent = this.beats[i].label;
+    if (!this.log) return;
+    if (this.logFor !== this.beats) {
+      this.logFor = this.beats;
+      this.log.replaceChildren(...this.beats.map(b => {
+        const li = document.createElement('li'); li.textContent = b.label; li.tabIndex = 0;
+        li.onclick = () => { this.pause(); this.seek(b.t1); };
+        li.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
+        return li;
+      }));
+    }
+    [...this.log.children].forEach((li, k) => {
+      li.hidden = k > i || !this.beats[k].label;
+      li.classList.toggle('now', k === i);
+      if (k === i) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+  }
+  render() {
+    if (!this.w) return;
+    const { ctx } = this;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const s = this.cur = this.stateAt(this.t);    // S.cur.get(obj) lets one object's paint read another's state
+    for (const o of this.objs) {
+      const p = s.get(o);
+      let alpha = p.opacity;
+      if (this.focus && !(p.tag && p.tag.split(' ').includes(this.focus))) alpha *= .22;
+      if (alpha <= 0.002 || p.draw === 0) continue;
+      ctx.save(); ctx.globalAlpha = alpha;
+      if (p.glow > .01) { ctx.shadowColor = paintColor(p.color || 'fg'); ctx.shadowBlur = 18 * p.glow; }
+      o.paint(ctx, p, this);
+      ctx.restore();
+    }
+    this.onFrame?.(s, this.t);
+  }
+  playFrom(t) {
+    if (reducedMotion.matches) { this.next(); return; }
+    this.seek(t); this.playing = true; this.playBtn.setAttribute('aria-pressed', 'true'); this.playBtn.textContent = 'Pause';
+    let last = performance.now();
+    const frame = now => {
+      if (!this.playing) return;
+      const t = this.t + (now - last) / 1000; last = now;
+      if (t >= this.stopAt) { this.seek(this.stopAt); return this.pause(); }
+      this.seek(t); requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+  pause() { this.playing = false; this.playBtn.setAttribute('aria-pressed', 'false'); this.playBtn.textContent = 'Play'; }
+  next() { const i = this.beatAt(this.t), b = this.beats[i]; const target = this.t < b.t1 - 1e-6 ? b.t1 : (this.beats[i + 1]?.t1 ?? this.T);
+           if (reducedMotion.matches) return this.seek(target); this.stopAt = target; this.playFrom(this.t < b.t1 - 1e-6 ? this.t : (this.beats[i + 1]?.t0 ?? this.T)); }
+  prev() { this.pause(); const i = this.beatAt(this.t), b = this.beats[i]; this.seek(this.t > b.t0 + .05 || i === 0 ? b.t0 : this.beats[i - 1].t0); }
+  setFocus(tag) { this.focus = tag; this.render(); }
+
+  // Instruments without a timeline: no buttons, the scene simply rests on its (single) frame.
+  #bareControls() {
+    this.playBtn = document.createElement('button'); this.scrub = document.createElement('input'); this.label = document.createElement('div');
+  }
+  // CSS-pixel offset inside the canvas → world coordinates.
+  toWorld(px, py) { return [(px - this.ox) / this.sx, (this.oy - py) / this.sy]; }
+  // Pointer helper for instruments: cb(x, y, type) in world coordinates, type 'down' | 'move' | 'up'.
+  onPointer(cb) {
+    const c = this.canvas; let down = false;
+    const at = e => { const r = c.getBoundingClientRect(); return this.toWorld(e.clientX - r.left, e.clientY - r.top); };
+    c.addEventListener('pointerdown', e => { down = true; c.setPointerCapture(e.pointerId); cb(...at(e), 'down'); });
+    c.addEventListener('pointermove', e => cb(...at(e), down ? 'drag' : 'move'));
+    c.addEventListener('pointerup', e => { down = false; cb(...at(e), 'up'); });
+  }
+
+  #controls() {
+    const bar = $('.controls', this.fig) || this.fig.insertBefore(Object.assign(document.createElement('div'), { className: 'controls' }), $('figcaption', this.fig));
+    bar.insertAdjacentHTML('afterbegin',
+      `<button class="btn" type="button" data-sc="replay" aria-label="Replay from the start">↺</button>
+       <button class="btn" type="button" data-sc="prev" aria-label="Previous beat">←</button>
+       <button class="btn" type="button" data-sc="play" aria-pressed="false">Play</button>
+       <button class="btn" type="button" data-sc="next" aria-label="Next beat">→</button>
+       <input class="scrub" type="range" min="0" max="100" value="0" aria-label="Timeline">`);
+    bar.insertAdjacentHTML('beforeend', '<ol class="step-log" aria-label="Steps so far"></ol><div class="sr-only" aria-live="polite"></div>');
+    const b = a => $(`[data-sc="${a}"]`, bar);
+    this.playBtn = b('play'); this.scrub = $('.scrub', bar); this.label = $('.sr-only', bar); this.log = $('.step-log', bar);
+    b('replay').onclick = () => { this.stopAt = this.T; this.playFrom(0); };
+    this.playBtn.onclick = () => { if (this.playing) return this.pause(); this.stopAt = this.T; this.playFrom(this.t >= this.T - 1e-6 ? 0 : this.t); };
+    b('next').onclick = () => { this.pause(); this.next(); };
+    b('prev').onclick = () => this.prev();
+    this.scrub.oninput = () => { this.pause(); this.seek(this.scrub.value / 100); };
+    this.fig.tabIndex = -1;
+    this.fig.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select')) return;
+      if (e.key === 'ArrowRight') { this.pause(); this.next(); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { this.prev(); e.preventDefault(); }
+    });
+  }
+}
+
+/* ---- animations: each returns (scene, t0, dur, ease) => void ---- */
+const many = (o, f) => (Array.isArray(o) ? o : [o]).map(f);
+function to(o, props, from = {}) {
+  return many(o, oo => (sc, t0, dur, e) => {
+    for (const [k, v] of Object.entries(props)) {
+      const a = k in from ? from[k] : sc.valueAt(oo, k, t0);
+      const b = typeof v === 'function' ? v(a) : v;
+      sc.track(oo, k, t0, t0 + dur, p => mix(a, b, e(p)));
+    }
+  });
+}
+const fadeIn = o => to(o, { opacity: 1 });
+const fadeOut = o => to(o, { opacity: 0 });
+const create = o => many(o, oo => [to(oo, { opacity: 1 }, { opacity: 1 }), to(oo, { draw: 1 }, { draw: 0 })]);
+const uncreate = o => to(o, { draw: 0 });
+const indicate = o => many(o, oo => (sc, t0, dur) => sc.track(oo, 'glow', t0, t0 + dur, p => ease.there(p)));
+const set = (o, props) => many(o, oo => (sc, t0) => { for (const [k, v] of Object.entries(props)) sc.track(oo, k, t0, t0, () => v); });
+// Stagger: run anims one after another inside the beat, with overlap lag (0 = sequential, 1 = together).
+const lagged = (anims, lag = .25) => (sc, t0, dur, e) => {
+  const n = anims.length, d = dur / (1 + (n - 1) * lag);
+  anims.forEach((a, i) => [a].flat(Infinity).forEach(f => f(sc, t0 + i * lag * d, d, e)));
+};
+
+/* ---- objects: plain props + paint(ctx, state, scene) ---- */
+function partialPath(ctx, pts, frac) {
+  if (pts.length < 2) return;
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); L += l; }
+  let left = L * clamp01(frac);
+  ctx.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const f = Math.min(1, left / (segs[i - 1] || 1));
+    ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f);
+    left -= segs[i - 1];
+  }
+}
+function arrowHead(ctx, x1, y1, x2, y2, size) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - size * Math.cos(a - .42), y2 - size * Math.sin(a - .42));
+  ctx.lineTo(x2 - size * Math.cos(a + .42), y2 - size * Math.sin(a + .42));
+  ctx.closePath(); ctx.fill();
+}
+const stroke = (ctx, p) => { ctx.strokeStyle = paintColor(p.color); ctx.lineWidth = p.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; if (p.dash) ctx.setLineDash(p.dash); };
+
+const Dot = p => ({ r: 6, color: 'fg', ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.beginPath(); ctx.arc(S.X(s.x), S.Y(s.y), s.r * (1 + .35 * (s.glow || 0)), 0, 2 * Math.PI); ctx.fill();
+} });
+const Line = p => ({ color: 'fg', width: 2.5, draw: 1, arrow: false, ...p, paint(ctx, s, S) {
+  const [x1, y1, x2, y2] = [S.X(s.x1), S.Y(s.y1), S.X(s.x2), S.Y(s.y2)];
+  const ex = x1 + (x2 - x1) * s.draw, ey = y1 + (y2 - y1) * s.draw;
+  stroke(ctx, s); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  if (s.arrow && s.draw > .05) { ctx.setLineDash([]); ctx.fillStyle = paintColor(s.color); arrowHead(ctx, x1, y1, ex, ey, 8 + s.width * 2); }
+} });
+const Arrow = p => Line({ arrow: true, ...p });
+const Circle = p => ({ color: 'fg', width: 2, R: 1, draw: 1, start: Math.PI / 2, ccw: true, fill: null, ...p, paint(ctx, s, S) {
+  // start is a maths angle (counter-clockwise from +x); create() sweeps counter-clockwise unless ccw: false
+  const turn = 2 * Math.PI * s.draw * (s.ccw ? 1 : -1);
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.start, -s.start - turn, s.ccw);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+const Arc = p => ({ color: 'fg', width: 3, R: 1, a0: 0, a1: Math.PI, draw: 1, ...p, paint(ctx, s, S) {
+  const a1 = s.a0 + (s.a1 - s.a0) * s.draw;
+  ctx.beginPath(); ctx.ellipse(S.X(s.x), S.Y(s.y), s.R * S.sx, s.R * S.sy, 0, -s.a0, -a1, a1 > s.a0);
+  stroke(ctx, s); ctx.stroke();
+} });
+const Path = p => ({ color: 'fg', width: 2.5, draw: 1, closed: false, fill: null, ...p, paint(ctx, s, S) {
+  const pts = s.pts.map(([x, y]) => [S.X(x), S.Y(y)]);
+  if (s.closed) pts.push(pts[0]);
+  ctx.beginPath(); partialPath(ctx, pts, s.draw);
+  if (s.fill && s.draw >= 1) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  stroke(ctx, s); ctx.stroke();
+} });
+// A function graph. To morph into another function, give fn2 and tween m: to(g, { m: 1 }).
+const Graph = p => ({ color: 'blue', width: 3, draw: 1, x0: 0, x1: 1, n: 240, m: 0, fn2: null, ...p, paint(ctx, s, S) {
+  const f = s.fn2 && s.m > 0 ? x => s.fn(x) * (1 - s.m) + s.fn2(x) * s.m : s.fn;
+  const pts = []; for (let i = 0; i <= s.n; i++) { const x = s.x0 + (s.x1 - s.x0) * i / s.n; pts.push([S.X(x), S.Y(f(x))]); }
+  ctx.beginPath(); partialPath(ctx, pts, s.draw); stroke(ctx, s); ctx.stroke();
+} });
+const Rect = p => ({ color: 'fg', width: 1.5, fill: null, radius: 4, ...p, paint(ctx, s, S) {
+  const x = S.X(s.x), y = S.Y(s.y + s.h), w = s.w * S.sx, h = s.h * S.sy;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, s.radius);
+  if (s.fill) { ctx.fillStyle = paintColor(s.fill); ctx.fill(); }
+  if (s.width) { stroke(ctx, s); ctx.stroke(); }
+} });
+// Text: either a fixed string, or fmt(value) so a number can count up with to(t, { value }).
+const Text = p => ({ color: 'fg', size: 15, font: 'sans', weight: 500, align: 'center', base: 'middle', dx: 0, dy: 0, ...p, paint(ctx, s, S) {
+  ctx.fillStyle = paintColor(s.color); ctx.textAlign = s.align; ctx.textBaseline = s.base;
+  ctx.font = `${s.weight} ${s.size}px ${tok(s.font)}`;
+  ctx.fillText(s.fmt ? s.fmt(s.value) : s.text, S.X(s.x) + s.dx, S.Y(s.y) + s.dy);
+} });
+// TeX rendered by MathJax into an image, drawn on the canvas (cached per tex+colour+size).
+const texCache = new Map();
+const Tex = p => ({ color: 'fg', size: 18, align: 'center', ...p, paint(ctx, s, S) {
+  if (!window.MathJax?.tex2svg) return;
+  const colour = paintColor(s.color), key = s.tex + '|' + colour + '|' + s.size;
+  let img = texCache.get(key);
+  if (!img) {
+    const svg = MathJax.tex2svg(s.tex, { display: false }).querySelector('svg');
+    const ex = s.size * 0.45, w = parseFloat(svg.getAttribute('width')) * ex, h = parseFloat(svg.getAttribute('height')) * ex;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    const src = svg.outerHTML.replace(/currentColor/g, colour);
+    img = new Image(); img.w = w; img.h = h; img.onload = redrawAll;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+    texCache.set(key, img);
+  }
+  if (!img.complete) return;
+  const x = S.X(s.x) - (s.align === 'center' ? img.w / 2 : s.align === 'right' ? img.w : 0);
+  ctx.drawImage(img, x, S.Y(s.y) - img.h / 2, img.w, img.h);
+} });
+// Width in CSS px of a TeX string at a size (exact once MathJax is ready, estimated before).
+function texWidth(tex, size = 18) {
+  if (!window.MathJax?.tex2svg) return tex.replace(/\\[a-z]+|[{}]/g, 'x').length * size * .5;
+  return parseFloat(MathJax.tex2svg(tex, { display: false }).querySelector('svg').getAttribute('width')) * size * .45;
+}
+// Lay TeX pieces out left to right as separate objects, so each can move, fade or recolour on its own.
+// Returns the objects (not yet added). align: 'center' | 'left'; gap in px.
+function texRow(sc, pieces, { x = 0, y = 0, size = 22, gap = 7, align = 'center', ...rest } = {}) {
+  const ws = pieces.map(p => texWidth(typeof p === 'string' ? p : p.tex, size));
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (pieces.length - 1);
+  let px = sc.X(x) - (align === 'center' ? total / 2 : 0);
+  return pieces.map((p, i) => {
+    const o = Tex({ size, ...rest, ...(typeof p === 'string' ? { tex: p } : p), x: (px - sc.ox) / sc.sx, y, align: 'left' });
+    px += ws[i] + gap; return o;
+  });
+}
+
+// Axes with ticks; returns its parts so they can be created together: sc.addAll(Axes({...})).
+function Axes({ x = [0, 10], y = [0, 6], step = [1, 1], color = 'muted', labels = true, opacity = 1 } = {}) {
+  const parts = [Arrow({ x1: x[0], y1: 0, x2: x[1], y2: 0, color, width: 1.5, opacity }), Arrow({ x1: 0, y1: y[0], x2: 0, y2: y[1], color, width: 1.5, opacity })];
+  if (labels) {
+    for (let v = Math.ceil(x[0] / step[0]) * step[0]; v < x[1]; v += step[0]) if (v) parts.push(Text({ x: v, y: 0, dy: 14, text: String(+v.toFixed(6)), size: 12, color, opacity }));
+    for (let v = Math.ceil(y[0] / step[1]) * step[1]; v < y[1]; v += step[1]) if (v) parts.push(Text({ x: 0, y: v, dx: -10, align: 'right', text: String(+v.toFixed(6)), size: 12, color, opacity }));
+  }
+  return parts;
+}
+// Any custom object: Shape({ ...props, paint(ctx, s, S) { … } }) — all numeric props tween.
+const Shape = p => p;
+
+// MathJax loads after the page: redraw scenes that contain TeX once it is ready.
+// Rebuilding (not just redrawing) lets texRow() measure real glyph widths.
+addEventListener('load', () => window.MathJax?.startup?.promise?.then(() => Scene.all.forEach(s => s.rebuild())));
+// Prose ↔ figure link: <span data-focus="fig-id:tag"> dims everything in that figure except objects tagged `tag`.
+document.addEventListener('pointerover', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('pointerout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-focus]'); if (el) { const [id, tag] = el.dataset.focus.split(':'); Scene.all.get(id)?.setFocus(tag); } });
+document.addEventListener('focusout', e => { const el = e.target.closest?.('[data-focus]'); if (el) Scene.all.get(el.dataset.focus.split(':')[0])?.setFocus(null); });
+
+
+// Text on a small background plate, for labels that sit over lines (call after setting ctx.font and fillStyle).
+function plateText(ctx, text, x, y, align = 'left', pad = 3) {
+  const w = ctx.measureText(text).width, h = parseInt(ctx.font.match(/(\d+)px/)[1]) + 2;
+  const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  const fill = ctx.fillStyle; ctx.fillStyle = tok('bg-2'); ctx.fillRect(x0 - pad, y - h / 2 - 1, w + 2 * pad, h + 2); ctx.fillStyle = fill;
+  ctx.textAlign = align; ctx.fillText(text, x, y);
+}
+
+/* ---------- page chrome: contents rail + reading progress ---------- */
+(() => {
+  const heads = $$('main h2[id]');
+  const list = $('.toc ol');
+  heads.forEach(h => { const li = document.createElement('li'); li.innerHTML = `<a href="#${h.id}">${h.textContent.replace(/^\d+/, m => m + ' ')}</a>`; list.append(li); });
+  const links = $$('.toc a');
+  const bar = $('.progress');
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (max > 0 ? 100 * scrollY / max : 0) + '%';
+    let cur = 0; heads.forEach((h, k) => { if (h.getBoundingClientRect().top < innerHeight * 0.35) cur = k; });
+    links.forEach((a, k) => a.setAttribute('aria-current', k === cur));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+
+/* ================= F17 arithmetic and the running example ================= */
+const P = 17;
+const md = a => ((a % P) + P) % P;
+const pw = (a, e) => { let r = 1; a = md(a); while (e) { if (e & 1) r = r * a % P; a = a * a % P; e >>= 1; } return r; };
+const inv = a => pw(a, P - 2);
+const ev = (c, x) => c.reduceRight((acc, ci) => md(acc * x + ci), 0);
+const wordOf = (c, dom) => dom.map(x => ev(c, x));
+// Coefficients of the unique polynomial of degree < xs.length through (xs, ys).
+function interp(xs, ys) {
+  const m = xs.length, out = new Array(m).fill(0);
+  for (let i = 0; i < m; i++) {
+    let num = [1], den = 1;
+    for (let j = 0; j < m; j++) {
+      if (j === i) continue;
+      const nx = new Array(num.length + 1).fill(0);
+      for (let t = 0; t < num.length; t++) { nx[t + 1] = md(nx[t + 1] + num[t]); nx[t] = md(nx[t] - xs[j] * num[t]); }
+      num = nx; den = md(den * (xs[i] - xs[j]));
+    }
+    const s = md(ys[i] * inv(den));
+    for (let t = 0; t < m; t++) out[t] = md(out[t] + s * num[t]);
+  }
+  return out;
+}
+function* combos(n, k, start = 0, acc = []) {
+  if (acc.length === k) { yield acc; return; }
+  for (let i = start; i <= n - (k - acc.length); i++) yield* combos(n, k, i + 1, [...acc, i]);
+}
+// Every codeword agreeing with w on at least k points (all others are farther than n − k), with its distance.
+function closeList(w, dom, k) {
+  const seen = new Map();
+  for (const S of combos(dom.length, k)) {
+    const c = interp(S.map(i => dom[i]), S.map(i => w[i])), key = c.join(',');
+    if (seen.has(key)) continue;
+    const cw = wordOf(c, dom);
+    seen.set(key, { c, cw, d: cw.reduce((s, v, i) => s + (v !== w[i]), 0) });
+  }
+  return [...seen.values()].sort((a, b) => a.d - b.d);
+}
+const nearest = (w, dom = L16, k = 4) => closeList(w, dom, k)[0];
+const L16 = Array.from({ length: 16 }, (_, i) => i + 1);
+const Fc = [3, 1, 4, 1], fw = wordOf(Fc, L16);
+const Gc = [15, 5, 6, 6], gw = wordOf(Gc, L16);
+const C1 = [2, 0, 1, 0], c1w = wordOf(C1, L16);
+const withErr = (w, errs) => { const o = w.slice(); for (const [x, e] of errs) o[x - 1] = md(o[x - 1] + e); return o; };
+const PAIRS = {
+  corr: { u: withErr(fw, [[3, 5], [8, 9], [12, 1]]), v: withErr(c1w, [[3, 3], [8, 4], [12, 6]]) },
+  sep: { u: withErr(fw, [[3, 5], [8, 9]]), v: withErr(c1w, [[12, 6], [15, 2]]) },
+  far: { u: [10, 4, 12, 1, 2, 3, 11, 1, 16, 6, 1, 2, 13, 13, 2, 7], v: [2, 13, 1, 3, 7, 1, 12, 1, 7, 1, 4, 9, 13, 4, 3, 9] },
+};
+const foldPair = (u, v, a) => u.map((x, i) => md(x + a * v[i]));
+const polyStr = c => c.map((a, i) => a === 0 ? '' : i === 0 ? `${a}` : `${a === 1 ? '' : a}x${['', '', '²', '³'][i]}`).filter(Boolean).join(' + ') || '0';
+
+/* ================= shared drawing vocabulary ================= */
+const u0 = sc => Math.max(.62, Math.min(1, sc.w / 900));
+const fpx = (sc, s) => Math.max(11, Math.round(s * u0(sc)));
+// A value grid: columns labelled by `cols`, rows 0..16, in the world rectangle [x0,x1]×[y0,y1].
+function Panel(x0, x1, y0, y1, cols) {
+  const n = cols.length, cw = (x1 - x0) / n, rh = (y1 - y0) / 17;
+  return { x0, x1, y0, y1, cols, n, cw, rh, cx: i => x0 + (i + .5) * cw, cy: v => y0 + (v + .5) * rh };
+}
+const GridShape = (pn, p = {}) => Shape({ opacity: 1, rowLabels: true, title: '', titleColor: 'fg-2', ...p, paint(ctx, s, S) {
+  ctx.strokeStyle = paintColor('grid'); ctx.lineWidth = 1;
+  for (let i = 0; i <= pn.n; i++) { const X = S.X(pn.x0 + i * pn.cw); ctx.beginPath(); ctx.moveTo(X, S.Y(pn.y0)); ctx.lineTo(X, S.Y(pn.y1)); ctx.stroke(); }
+  for (const v of [0, 4, 8, 12, 16]) { const Y = S.Y(pn.cy(v)); ctx.beginPath(); ctx.moveTo(S.X(pn.x0), Y); ctx.lineTo(S.X(pn.x1), Y); ctx.stroke(); }
+  const fs = fpx(S, 12);
+  ctx.font = `500 ${fs}px ${tok('mono')}`; ctx.fillStyle = paintColor('muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const every = S.sx * pn.cw < fs * 1.6 ? 2 : 1;
+  pn.cols.forEach((c, i) => { if (i % every === 0 || pn.n <= 8) ctx.fillText(String(c), S.X(pn.cx(i)), S.Y(pn.y0) + 4); });
+  if (s.rowLabels) { ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; for (const v of [0, 8, 16]) ctx.fillText(String(v), S.X(pn.x0) - 5, S.Y(pn.cy(v))); }
+  if (s.title) { ctx.font = `600 ${fpx(S, 14)}px ${tok('sans')}`; ctx.fillStyle = paintColor(s.titleColor); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(s.title, S.X(pn.x0), S.Y(pn.y1) - 4); }
+} });
+const dotR = (S, pn) => Math.max(3.2, Math.min(8, .36 * Math.min(S.sx * pn.cw, S.sy * pn.rh * 1.6)));
+// A word on a panel: filled dots; reveal (0..n) animates them in left to right.
+const WordDots = (pn, vals, p = {}) => Shape({ vals, color: 'blue', reveal: pn.n, opacity: 1, ...p, paint(ctx, s, S) {
+  const r = dotR(S, pn);
+  for (let i = 0; i < pn.n; i++) {
+    const a = clamp01(s.reveal - i); if (a <= 0 || s.vals[i] == null) continue;
+    ctx.globalAlpha *= a; ctx.fillStyle = paintColor((s.colors && s.colors[i]) || s.color);
+    ctx.beginPath(); ctx.arc(S.X(pn.cx(i)), S.Y(pn.cy(s.vals[i])), r * (1 + .4 * (s.glow || 0)), 0, 7); ctx.fill();
+    ctx.globalAlpha /= a;
+  }
+} });
+// A codeword on a panel: rings.
+const WordRings = (pn, vals, p = {}) => Shape({ vals, color: 'green', reveal: pn.n, opacity: 1, scale: 1.65, ...p, paint(ctx, s, S) {
+  const r = dotR(S, pn) * s.scale;
+  ctx.strokeStyle = paintColor(s.color); ctx.lineWidth = 2;
+  if (s.dash) ctx.setLineDash(s.dash);
+  for (let i = 0; i < pn.n; i++) {
+    const a = clamp01(s.reveal - i); if (a <= 0 || s.vals[i] == null) continue;
+    ctx.globalAlpha *= a; ctx.beginPath(); ctx.arc(S.X(pn.cx(i)), S.Y(pn.cy(s.vals[i])), r, 0, 7); ctx.stroke(); ctx.globalAlpha /= a;
+  }
+} });
+// Error ticks: a red dashed segment from the ring to the dot where they differ.
+const ErrTicks = (pn, a, b, p = {}) => Shape({ a, b, opacity: 1, color: 'red', ...p, paint(ctx, s, S) {
+  ctx.strokeStyle = paintColor(s.color); ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+  for (let i = 0; i < pn.n; i++) if (s.a[i] !== s.b[i]) { const X = S.X(pn.cx(i)); ctx.beginPath(); ctx.moveTo(X, S.Y(pn.cy(s.a[i]))); ctx.lineTo(X, S.Y(pn.cy(s.b[i]))); ctx.stroke(); }
+} });
+// Column highlight (queries).
+const ColHi = (pn, i, p = {}) => Shape({ opacity: 0, color: 'yellow', i, ...p, paint(ctx, s, S) {
+  const X0 = S.X(pn.x0 + s.i * pn.cw), X1 = S.X(pn.x0 + (s.i + 1) * pn.cw);
+  ctx.fillStyle = paintColor(s.color); ctx.globalAlpha *= .16; ctx.fillRect(X0, S.Y(pn.y1), X1 - X0, S.Y(pn.y0) - S.Y(pn.y1));
+  ctx.globalAlpha /= .16; ctx.strokeStyle = paintColor(s.color); ctx.lineWidth = 2; ctx.strokeRect(X0 + 1, S.Y(pn.y1) + 1, X1 - X0 - 2, S.Y(pn.y0) - S.Y(pn.y1) - 2);
+} });
+// A strip: n cells with numbers; marks[i] in {'ok','err','hi','none'}; reveal animates left to right.
+const Strip = p => Shape({ x: 0, y: 0, w: 10, h: 1, vals: [], marks: [], reveal: 99, label: '', labelColor: 'fg', note: '', noteColor: 'fg-2', frame: null, opacity: 1, nums: true, ...p, paint(ctx, s, S) {
+  const n = s.vals.length || s.marks.length, cw = s.w / n;
+  const fs = Math.max(10.5, Math.min(14, S.sx * cw * .5));
+  for (let i = 0; i < n; i++) {
+    const a = clamp01(s.reveal - i); if (a <= 0) continue;
+    const X = S.X(s.x + i * cw), Y = S.Y(s.y + s.h), W = S.sx * cw, H = S.sy * s.h;
+    const m = s.marks[i] || 'none';
+    const fill = m === 'ok' ? 'green' : m === 'err' ? 'red' : m === 'hi' ? 'yellow' : m === 'dim' ? 'muted' : null;
+    ctx.save(); ctx.globalAlpha *= a;
+    if (fill) { ctx.fillStyle = paintColor(fill); ctx.globalAlpha *= m === 'ok' ? .22 : m === 'dim' ? .12 : .38; ctx.fillRect(X + 1, Y + 1, W - 2, H - 2); ctx.globalAlpha /= m === 'ok' ? .22 : m === 'dim' ? .12 : .38; }
+    ctx.strokeStyle = paintColor('rule'); ctx.lineWidth = 1; ctx.strokeRect(X + .5, Y + .5, W - 1, H - 1);
+    if (s.nums && s.vals.length) { ctx.fillStyle = paintColor(m === 'err' ? 'red' : 'fg'); ctx.font = `500 ${fs}px ${tok('mono')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(s.vals[i]), X + W / 2, Y + H / 2 + 1); }
+    ctx.restore();
+  }
+  if (s.frame) { ctx.strokeStyle = paintColor(s.frame); ctx.lineWidth = 2.5; ctx.strokeRect(S.X(s.x) - 3, S.Y(s.y + s.h) - 3, S.sx * s.w + 6, S.sy * s.h + 6); }
+  const lf = fpx(S, 14);
+  if (s.label) { ctx.font = `600 ${lf}px ${tok('sans')}`; ctx.fillStyle = paintColor(s.labelColor); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(s.label, S.X(s.x) - 8, S.Y(s.y + s.h / 2)); }
+  if (s.note) { ctx.font = `500 ${lf - 1}px ${tok('mono')}`; ctx.fillStyle = paintColor(s.noteColor); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s.note, S.X(s.x + s.w) + 8, S.Y(s.y + s.h / 2)); }
+} });
+const marksVs = (w, c) => w.map((x, i) => x === c[i] ? 'ok' : 'err');
+// A text line drawn in sans/mono at a world point.
+const Label = p => Text({ font: 'sans', size: 14, ...p });
+
+/* ================= Figure 1: spot checks ================= */
+(() => {
+  const one = withErr(fw, [[8, 9]]);                // 14 -> 6
+  const many = withErr(one, [[1, 5], [4, 4], [6, 7], [9, 6], [11, 5], [13, 8], [16, 8]]);
+  const Q = [2, 11, 15];
+  const out = $('#fig-open .readout');
+  const sc = new Scene('#fig-open', n => n ? { x: [0, 100], y: [0, 62], pad: 14 } : { x: [0, 100], y: [0, 62], pad: 20 }, sc => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 58, L16);
+    const grid = sc.add(GridShape(pn, { opacity: 0 }));
+    const rings = sc.add(WordRings(pn, fw, { reveal: 0, tag: 'code' }));
+    const dots = sc.add(WordDots(pn, fw, { reveal: 0, colors: fw.map(() => 'blue') }));
+    const ticks = sc.add(ErrTicks(pn, fw, fw, { opacity: 0 }));
+    const qs = sc.addAll(Q.map(x => ColHi(pn, x - 1)));
+    const cols1 = fw.map((_, i) => i === 7 ? 'red' : 'blue');
+    const colsM = many.map((v, i) => v !== fw[i] ? 'red' : 'blue');
+    sc.play('The word: the values of f(x) = 3 + x + 4x² + x³ at x = 1, …, 16, each dot on its green codeword ring.', [fadeIn(grid), to(rings, { reveal: 16 }), to(dots, { reveal: 16 })], 1.6, ease.linear);
+    sc.play('One entry changes: f(8) = 14 becomes 6.', [to(dots, { vals: one, colors: cols1 }), set(ticks, { b: one }), fadeIn(ticks)], 1);
+    sc.play('Three spot checks, at x = 2, 11 and 15, all match: the change goes unseen. Random checks miss it with probability (15/16)³ ≈ 0.82.', [lagged(qs.map(fadeIn), .3)], 1.2);
+    sc.play('Seven more entries change, at x = 1, 4, 6, 9, 11, 13 and 16: half the word is wrong.', [fadeOut(qs), to(dots, { vals: many, colors: colsM }), set(ticks, { b: many })], 1.2);
+    sc.play('The same three checks now hit a change at x = 11. Eight changes escape three random checks with probability (8/16)³ = 1/8.', [lagged(qs.map(q => fadeIn(q)), .3), to(qs[1], { color: 'red' }), indicate(dots)], 1.2);
+  });
+  sc.onFrame = (s, t) => {
+    const b = sc.beatAt(t);
+    out.textContent = b < 1 ? 'changed entries: 0' : b < 3 ? 'changed: 1 of 16 · P(3 checks miss) = (15/16)³ ≈ 0.82' : 'changed: 8 of 16 · P(3 checks miss) = (8/16)³ = 0.125';
+  };
+})();
+
+/* ================= Figure 2: four values fix a codeword ================= */
+(() => {
+  const H = [1, 5, 10, 14];                     // handle columns: x = 2, 6, 11, 15
+  let hv = H.map(i => fw[i]), sel = 0, dragging = -1;
+  const out = $('#fig-interp .readout');
+  const sc = new Scene('#fig-interp', n => ({ x: [0, 100], y: [0, 62], pad: n ? 14 : 20, controls: false }), (sc, { vals = hv, s = 0 }) => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 56, L16);
+    sc.pn = pn;
+    const c = interp(H.map(i => L16[i]), vals), cw = wordOf(c, L16);
+    sc.add(GridShape(pn));
+    sc.add(WordRings(pn, cw));
+    sc.add(WordDots(pn, cw.map((v, i) => H.includes(i) ? null : v), { color: 'blue' }));
+    sc.add(Shape({ paint(ctx, st, S) {
+      const r = dotR(S, pn) * 1.5;
+      H.forEach((col, j) => {
+        const X = S.X(pn.cx(col)), Y = S.Y(pn.cy(vals[j]));
+        ctx.fillStyle = paintColor('yellow'); ctx.beginPath(); ctx.arc(X, Y, r, 0, 7); ctx.fill();
+        if (j === s) { ctx.strokeStyle = paintColor('fg'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X, Y, r + 4, 0, 7); ctx.stroke(); }
+      });
+    } }));
+    out.textContent = `p(x) = ${polyStr(c)}`;
+  });
+  const setVal = (j, v) => { hv = hv.slice(); hv[j] = Math.max(0, Math.min(16, v)); sc.rebuild({ vals: hv, s: j }); };
+  sc.onPointer((x, y, type) => {
+    const pn = sc.pn;
+    if (type === 'down') { dragging = -1; let best = 1e9; H.forEach((col, j) => { const d = Math.abs(x - pn.cx(col)); if (d < pn.cw * 1.1 && d < best) { best = d; dragging = j; } }); if (dragging >= 0) sel = dragging; }
+    if ((type === 'down' || type === 'drag') && dragging >= 0) setVal(dragging, Math.round((y - pn.y0) / pn.rh - .5));
+    if (type === 'up') dragging = -1;
+  });
+  sc.canvas.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { sel = (sel + (e.key === 'ArrowRight' ? 1 : 3)) % 4; sc.rebuild({ vals: hv, s: sel }); e.preventDefault(); }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { setVal(sel, hv[sel] + (e.key === 'ArrowUp' ? 1 : -1)); e.preventDefault(); }
+  });
+})();
+
+/* ================= Figure 3: two codewords agree on at most k - 1 points ================= */
+(() => {
+  const same = L16.map((_, i) => i).filter(i => fw[i] === gw[i]);
+  new Scene('#fig-dist', n => ({ x: [0, 100], y: [0, 66], pad: n ? 14 : 20 }), sc => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 54, L16);
+    const grid = sc.add(GridShape(pn, { opacity: 0 }));
+    const hi = sc.addAll(same.map(i => ColHi(pn, i, { color: 'green' })));
+    const df = sc.add(WordDots(pn, fw, { color: 'blue', reveal: 0, tag: 'f' }));
+    const dg = sc.add(WordDots(pn, gw, { color: 'purple', reveal: 0, tag: 'g' }));
+    const eq = sc.add(Tex({ x: 50, y: 61, tex: 'g - f = 5(x-2)(x-7)(x-11)', size: sc.narrow ? 15 : 19, opacity: 0 }));
+    sc.play('The codeword f, drawn in blue here to tell it from g.', [fadeIn(grid), to(df, { reveal: 16 })], 1.2, ease.linear);
+    sc.play('A second codeword g = f + 5(x − 2)(x − 7)(x − 11), in purple.', [to(dg, { reveal: 16 }), fadeIn(eq)], 1.2, ease.linear);
+    sc.play('They coincide only at x = 2, 7 and 11, the roots of g − f.', [lagged(hi.map(fadeIn), .3), indicate(eq)], 1.1);
+    sc.play('g − f is a non-zero cubic, so it has at most 3 roots: f and g differ at the other 13 points.', [to([df, dg], { opacity: .9 })], .8);
+  });
+})();
+
+/* ================= Figure 4: the three radii ================= */
+(() => {
+  const out = $('#fig-radii .readout');
+  const sc = new Scene('#fig-radii', n => ({ x: [-.02, 1.02], y: [0, 10], pad: n ? 16 : 28, controls: false }), (sc, { i = 4 }) => {
+    const rho = i / 16, udr = (1 - rho) / 2, J = 1 - Math.sqrt(rho), cap = 1 - rho;
+    const fs = fpx(sc, 13);
+    sc.add(Shape({ paint(ctx, s, S) {
+      const Y = S.Y(5), h = 14;
+      const seg = (a, b, col, al) => { ctx.fillStyle = paintColor(col); ctx.globalAlpha = al; ctx.fillRect(S.X(a), Y - h / 2, S.X(b) - S.X(a), h); ctx.globalAlpha = 1; };
+      seg(0, udr, 'green', .55); seg(udr, J, 'orange', .5); seg(J, cap, 'red', .3); seg(cap, 1, 'muted', .15);
+      ctx.strokeStyle = paintColor('rule'); ctx.strokeRect(S.X(0), Y - h / 2, S.X(1) - S.X(0), h);
+      ctx.font = `500 ${fs}px ${tok('mono')}`; ctx.fillStyle = paintColor('muted'); ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+      ctx.fillText('0', S.X(0), Y + h / 2 + 4); ctx.fillText('1', S.X(1), Y + h / 2 + 4);
+      const mark = (v, txt, col, up, row) => {
+        const X = S.X(v); ctx.strokeStyle = paintColor(col); ctx.lineWidth = 2;
+        const y2 = up ? Y - h / 2 - 8 - row * (fs + 8) : Y + h / 2 + 8 + row * (fs + 8);
+        ctx.beginPath(); ctx.moveTo(X, Y + (up ? -h / 2 : h / 2)); ctx.lineTo(X, y2); ctx.stroke();
+        ctx.fillStyle = paintColor(col); ctx.textBaseline = up ? 'bottom' : 'top';
+        const w = ctx.measureText(txt).width; let tx = X; ctx.textAlign = 'center';
+        if (tx - w / 2 < 4) tx = 4 + w / 2; if (tx + w / 2 > S.w - 4) tx = S.w - 4 - w / 2;
+        ctx.fillText(txt, tx, y2 + (up ? -2 : 2));
+      };
+      ctx.font = `600 ${fs}px ${tok('mono')}`;
+      mark(udr, `(1−ρ)/2 = ${udr.toFixed(3)}`, 'green', false, 1);
+      mark(J, `1−√ρ = ${J.toFixed(3)}`, 'orange', true, 0);
+      mark(cap, `1−ρ = ${cap.toFixed(3)}`, 'red', true, J > cap - .3 ? 1 : 0);
+    } }));
+    const k = i, n = 16;
+    out.textContent = `ρ = ${i}/16 · with n = 16, k = ${k}: one codeword up to ${Math.floor((n - k) / 2)} errors · short lists below ${+(n * J).toFixed(2)} · every word within ${n - k}`;
+  });
+  range($('#radii-rho'), v => sc.rebuild({ i: v }), v => `${v}/16`);
+})();
+
+/* ================= Figure 5: the list of a word ================= */
+(() => {
+  const hw = fw.map((v, i) => i < 8 ? v : gw[i]);
+  const all = closeList(hw, L16, 4);
+  const out = $('#fig-list .readout');
+  const sc = new Scene('#fig-list', n => ({ x: [0, 100], y: [0, 62], pad: n ? 14 : 20, controls: false }), (sc, { e = 7 }) => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 56, L16);
+    sc.add(GridShape(pn));
+    const members = all.filter(m => m.d <= e);
+    const named = m => m.c.join() === Fc.join() ? 'f' : m.c.join() === Gc.join() ? 'g' : null;
+    members.slice(0, 8).reverse().forEach(m => {
+      const nm = named(m);
+      sc.add(WordRings(pn, m.cw, { color: nm === 'f' ? 'blue' : nm === 'g' ? 'purple' : 'green', scale: nm ? 1.75 : 1.35, dash: nm ? null : [3, 3], opacity: nm ? 1 : .7 }));
+    });
+    sc.add(WordDots(pn, hw, { color: 'fg' }));
+    const regime = e <= 6 ? 'unique decoding (≤ 6)' : e < 8 ? 'Johnson range (< 8)' : 'beyond Johnson';
+    const list = members.slice(0, 3).map(m => `${named(m) || 'other'} (${m.d})`).join(', ');
+    out.textContent = `radius ${e}: ${regime} · list size ${members.length}${members.length ? ' · ' + list + (members.length > 3 ? ', …' : '') : ''}`;
+  });
+  range($('#list-e'), v => sc.rebuild({ e: v }));
+})();
+
+/* ================= Figure 6: commit and query ================= */
+(() => {
+  new Scene('#fig-merkle', n => ({ x: [0, 100], y: [0, 60], pad: n ? 12 : 20 }), sc => {
+    const x0 = sc.narrow ? 2 : 8, x1 = sc.narrow ? 98 : 80, cw = (x1 - x0) / 16;
+    const leafY = 4, lh = 7;
+    const strip = sc.add(Strip({ x: x0, y: leafY, w: x1 - x0, h: lh, vals: fw, reveal: 0, marks: fw.map(() => 'none') }));
+    const lvY = [20, 32, 44, 54];
+    const nodes = [], edges = [];
+    const nodeX = (lv, j) => x0 + (j + .5) * (x1 - x0) / (16 >> (lv + 1));
+    const childX = (lv, j) => lv === 0 ? x0 + (j + .5) * cw : nodeX(lv - 1, j);
+    const childY = lv => lv === 0 ? leafY + lh : lvY[lv - 1];
+    for (let lv = 0; lv < 4; lv++) {
+      const row = [];
+      for (let j = 0; j < 16 >> (lv + 1); j++) {
+        const X = nodeX(lv, j), Y = lvY[lv];
+        edges.push(sc.add(Line({ x1: childX(lv, 2 * j), y1: childY(lv), x2: X, y2: Y - 1.2, color: 'rule', width: 1.5, draw: 0 })));
+        edges.push(sc.add(Line({ x1: childX(lv, 2 * j + 1), y1: childY(lv), x2: X, y2: Y - 1.2, color: 'rule', width: 1.5, draw: 0 })));
+        row.push(sc.add(Shape({ X, Y, opacity: 0, color: 'muted', ring: 'rule', paint(ctx, s, S) {
+          const r = Math.max(5, Math.min(9, S.sx * cw * .35));
+          ctx.fillStyle = paintColor('bg-3'); ctx.strokeStyle = paintColor(s.ring); ctx.lineWidth = s.ring === 'rule' ? 1.5 : 3;
+          ctx.beginPath(); ctx.arc(S.X(s.X), S.Y(s.Y), r * (1 + .4 * (s.glow || 0)), 0, 7); ctx.fill(); ctx.stroke();
+        } })));
+      }
+      nodes.push(row);
+    }
+    const fs = fpx(sc, 13);
+    const rootLbl = sc.add(Label({ x: nodeX(3, 0) + 3, y: 54, text: 'root', align: 'left', size: fs, color: 'fg-2', opacity: 0 }));
+    const vx = sc.narrow ? 78 : 92;
+    const ver = sc.add(Label({ x: vx, y: sc.narrow ? 58 : 54, text: 'verifier', size: fs, color: 'fg', weight: 600, opacity: 0 }));
+    const send = sc.add(Arrow({ x1: nodeX(3, 0) + (sc.narrow ? 9 : 8), y1: 54, x2: vx - (sc.narrow ? 7 : 6), y2: sc.narrow ? 57 : 54, color: 'fg-2', width: 2, draw: 0 }));
+    const qi = 10;
+    const path = [5, 2, 1, 0], sib = [11, 4, 3, 0];   // node index on path per level; sibling: level 0 is a leaf index
+    sc.play('The prover\'s word: 16 entries, the leaves of a Merkle tree.', [to(strip, { reveal: 16 })], 1.1, ease.linear);
+    sc.play('Hash pairs of leaves, then pairs of hashes, up to a single root.', [lagged([0, 1, 2, 3].map(lv => [create(edges.filter((_, k) => k >= (lv === 0 ? 0 : [16, 24, 28][lv - 1]) && k < [16, 24, 28, 30][lv])), nodes[lv].map(fadeIn)]), .6)], 2);
+    sc.play('Only the root is sent. It fixes all 16 entries: changing one would change the root.', [fadeIn(rootLbl), fadeIn(ver), create(send), to(nodes[3][0], { ring: 'blue' }), indicate(nodes[3][0])], 1.1);
+    sc.play('The verifier queries x = 11.', [set(strip, { marks: fw.map((_, i) => i === qi ? 'hi' : 'none') })], .8);
+    sc.play('The prover opens f(11) = 10 with the 4 sibling hashes on its path: leaf 12 and three inner nodes.', [set(strip, { marks: fw.map((_, i) => i === qi ? 'hi' : i === sib[0] ? 'hi' : 'none') }), ...[1, 2, 3].map(lv => to(nodes[lv - 1][sib[lv]], { ring: 'yellow' })), indicate([1, 2, 3].map(lv => nodes[lv - 1][sib[lv]]))], 1.2);
+    sc.play('The verifier rehashes up the path and compares with the root. The other 15 entries stay unseen.', [lagged(path.map((j, lv) => to(nodes[lv][j], { ring: 'green' })), .5)], 1.4);
+  });
+})();
+
+/* ================= Figure 7: k reads always pass ================= */
+(() => {
+  const r = [4, 2, 8, 3, 15, 14, 15, 12, 6, 3, 15, 0, 12, 13, 0, 14];
+  const Q = [1, 5, 10, 14];
+  const c = interp(Q.map(i => L16[i]), Q.map(i => r[i])), cw = wordOf(c, L16);
+  const fifth = [8, 2, 6, 12].find(i => cw[i] !== r[i]);
+  const d = nearest(r).d;
+  new Scene('#fig-local', n => ({ x: [0, 100], y: [0, 62], pad: n ? 14 : 20 }), sc => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 58, L16);
+    const grid = sc.add(GridShape(pn, { opacity: 0 }));
+    const hs = sc.addAll(Q.map(i => ColHi(pn, i)));
+    const h5 = sc.add(ColHi(pn, fifth, { color: 'red' }));
+    const rings = sc.add(WordRings(pn, cw, { reveal: 0 }));
+    const ticks = sc.add(ErrTicks(pn, cw, r, { opacity: 0 }));
+    const dots = sc.add(WordDots(pn, r, { reveal: 0 }));
+    sc.play(`A random word: 16 independent values. Its nearest codeword is wrong in ${d} places.`, [fadeIn(grid), to(dots, { reveal: 16 })], 1.2, ease.linear);
+    sc.play('Read four entries, at x = 2, 6, 11 and 15.', [lagged(hs.map(fadeIn), .3)], 1);
+    sc.play(`The cubic ${polyStr(c)} passes through all four: every read is consistent with the code.`, [to(rings, { reveal: 16 })], 1.4, ease.linear);
+    sc.play('Elsewhere that cubic and the word disagree, but the verifier read none of those entries.', [to(ticks, { opacity: .8 })], .9);
+    sc.play(`A fifth read, at x = ${L16[fifth]}, finally disagrees: the word says ${r[fifth]}, the cubic says ${cw[fifth]}.`, [fadeIn(h5), indicate(dots)], 1);
+  });
+})();
+
+/* ================= Figure 8: the quotient of an evaluation claim ================= */
+(() => {
+  const z = 5, dom = L16.filter(x => x !== z), fz = ev(Fc, z);
+  const out = $('#fig-quot .readout');
+  const sc = new Scene('#fig-quot', n => ({ x: [0, 100], y: [0, 62], pad: n ? 14 : 20, controls: false }), (sc, { y = 11 }) => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 6, 56, dom);
+    const q = dom.map(x => md((ev(Fc, x) - y) * inv(x - z)));
+    const best = closeList(q, dom, 3)[0];
+    sc.add(GridShape(pn));
+    sc.add(WordRings(pn, best.cw));
+    sc.add(ErrTicks(pn, best.cw, q));
+    sc.add(WordDots(pn, q, { colors: q.map((v, i) => v === best.cw[i] ? 'blue' : 'red') }));
+    out.textContent = y === fz ? `y = ${y} = f(5): q = ${polyStr(best.c)}, a codeword` : `y = ${y} ≠ f(5): nearest quadratic misses ${best.d} of 15`;
+  });
+  range($('#quot-y'), v => sc.rebuild({ y: v }));
+})();
+
+/* ================= Figure 9: a fold, cell by cell ================= */
+(() => {
+  const { u, v } = PAIRS.corr, a = 3, fo = foldPair(u, v, a), cf = foldPair(fw, c1w, a);
+  new Scene('#fig-combo', n => ({ x: [0, 100], y: [0, 34], pad: n ? 12 : 18 }), sc => {
+    const x0 = sc.narrow ? 17 : 12, w = 99 - x0;
+    const su = sc.add(Strip({ x: x0, y: 24, w, h: 7, vals: u, marks: marksVs(u, fw), reveal: 0, label: 'u', labelColor: 'blue' }));
+    const sv = sc.add(Strip({ x: x0, y: 14, w, h: 7, vals: v, marks: marksVs(v, c1w), reveal: 0, label: 'v', labelColor: 'purple' }));
+    const sf = sc.add(Strip({ x: x0, y: 1, w, h: 7, vals: fo, marks: marksVs(fo, cf), reveal: 0, label: sc.narrow ? 'u+3v' : 'u + 3v', labelColor: 'teal' }));
+    const al = sc.add(Label({ x: x0 - 1, y: 11, text: 'α = 3', align: 'right', size: fpx(sc, 14), color: 'yellow', weight: 600, opacity: 0 }));
+    sc.play('u: the codeword f with errors at x = 3, 8 and 12, in red.', [to(su, { reveal: 16 })], 1, ease.linear);
+    sc.play('v: the codeword 2 + x² with errors at the same three points.', [to(sv, { reveal: 16 })], 1, ease.linear);
+    sc.play('The verifier sends a random α, here α = 3.', [fadeIn(al), indicate(al)], .8);
+    sc.play('Each cell of the fold is u(x) + 3·v(x) mod 17; the first is 9 + 3·3 = 18 = 1.', [to(sf, { reveal: 16 })], 2.2, ease.linear);
+    sc.play('The fold is 3 errors from the codeword f + 3(2 + x²), on the same three points.', [indicate(sf)], .9);
+  });
+})();
+
+/* ================= Figure 10: all 17 folds, three pairs ================= */
+(() => {
+  const data = {};
+  for (const [k, { u, v }] of Object.entries(PAIRS)) data[k] = Array.from({ length: P }, (_, a) => { const w = foldPair(u, v, a), b = nearest(w); return { w, d: b.d, marks: marksVs(w, b.cw) }; });
+  let cs = 'corr';
+  const out = $('#fig-gap .readout'), slider = $('#gap-e');
+  const sc = new Scene('#fig-gap', n => ({ x: [0, 100], y: [n ? 0 : -1.3, 17.2], pad: n ? 10 : 16, controls: false }), (sc, { c = 'corr', e = 3 }) => {
+    const x0 = sc.narrow ? 15 : 13, x1 = sc.narrow ? 88 : 86;
+    data[c].forEach((r, a) => sc.add(Strip({ x: x0, y: 16.2 - a, w: x1 - x0, h: .78, vals: r.w, nums: !sc.narrow, marks: r.marks,
+      label: sc.narrow ? `α=${a}` : `α = ${a}`, labelColor: 'yellow', note: sc.narrow ? `${r.d}` : `${r.d} err`, noteColor: r.d <= e ? 'orange' : 'muted', frame: r.d <= e ? 'orange' : null })));
+    const k = data[c].filter(r => r.d <= e).length;
+    out.textContent = `within ${e} errors: ${k} of 17 folds`;
+  });
+  const go = () => sc.rebuild({ c: cs, e: +slider.value });
+  $$('#fig-gap [data-case]').forEach(b => b.onclick = () => {
+    cs = b.dataset.case; $$('#fig-gap [data-case]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    slider.value = { corr: 3, sep: 2, far: 7 }[cs]; slider.dispatchEvent(new Event('input'));
+  });
+  range(slider, go);
+})();
+
+/* ================= Figure 11: two close folds give a shared agreement set ================= */
+(() => {
+  const { u, v } = PAIRS.corr;
+  const w1 = foldPair(u, v, 4), w2 = foldPair(u, v, 2);
+  const m1 = marksVs(w1, nearest(w1).cw), m2 = marksVs(w2, nearest(w2).cw);
+  const inS = L16.map((_, i) => m1[i] === 'ok' && m2[i] === 'ok');
+  new Scene('#fig-twopt', n => ({ x: [0, 100], y: [0, 47], pad: n ? 12 : 18 }), sc => {
+    const x0 = sc.narrow ? 17 : 13, w = 99 - x0, h = 6.5;
+    const r1 = sc.add(Strip({ x: x0, y: 39, w, h, vals: w1, marks: m1, reveal: 0, label: sc.narrow ? 'u+4v' : 'w₁ = u + 4v', labelColor: 'teal' }));
+    const r2 = sc.add(Strip({ x: x0, y: 30.5, w, h, vals: w2, marks: m2, reveal: 0, label: sc.narrow ? 'u+2v' : 'w₂ = u + 2v', labelColor: 'teal' }));
+    const rs = sc.add(Strip({ x: x0, y: 20.5, w, h, vals: L16, marks: inS.map(b => b ? 'ok' : 'err'), reveal: 0, label: 'S', labelColor: 'green', tag: 'S' }));
+    const ru = sc.add(Strip({ x: x0, y: 10, w, h, vals: u, marks: inS.map(b => b ? 'ok' : 'dim'), reveal: 0, label: 'u', labelColor: 'blue' }));
+    const rv = sc.add(Strip({ x: x0, y: 1.5, w, h, vals: v, marks: inS.map(b => b ? 'ok' : 'dim'), reveal: 0, label: 'v', labelColor: 'purple' }));
+    sc.play('w₁ = u + 4v is 2 errors from a codeword, at x = 8 and 12.', [to(r1, { reveal: 16 })], 1, ease.linear);
+    sc.play('w₂ = u + 2v is 2 errors from a codeword, at x = 3 and 12.', [to(r2, { reveal: 16 })], 1, ease.linear);
+    sc.play('Off the union {3, 8, 12}, both folds agree with codewords. That is the set S: 13 of the 16 points (labelled by x).', [to(rs, { reveal: 16 })], 1.2, ease.linear);
+    sc.play('On S, v = (w₁ − w₂)/2 and u = w₁ − 4v are combinations of codewords, so u and v agree with codewords there.', [to(ru, { reveal: 16 }), to(rv, { reveal: 16 })], 1.4, ease.linear);
+    sc.play('u and v have correlated agreement on S, with |S| = 13 ≥ 16 − 2·2.', [indicate(rs)], .9);
+  });
+})();
+
+/* ================= Figure 12: error sets add up under a fold ================= */
+(() => {
+  const S = PAIRS.sep, C = PAIRS.corr;
+  const fs = foldPair(S.u, S.v, 1), fc = foldPair(C.u, C.v, 1);
+  const cf = foldPair(fw, c1w, 1);
+  new Scene('#fig-union', n => ({ x: [0, 100], y: [0, 70], pad: n ? 12 : 18 }), sc => {
+    const x0 = sc.narrow ? 15 : 12, w = 99 - x0, h = 6.2, fz = fpx(sc, 14);
+    const row = (y, vals, ref, label, col) => sc.add(Strip({ x: x0, y, w, h, vals, marks: marksVs(vals, ref), reveal: 0, label, labelColor: col }));
+    const t1 = sc.add(Label({ x: x0, y: 66.5, text: 'separately close', align: 'left', size: fz, weight: 600, color: 'fg-2', opacity: 0 }));
+    const a1 = row(56, S.u, fw, 'u', 'blue'), b1 = row(48, S.v, c1w, 'v', 'purple'), f1 = row(40, fs, cf, 'u + v', 'teal');
+    const t2 = sc.add(Label({ x: x0, y: 32, text: 'correlated', align: 'left', size: fz, weight: 600, color: 'fg-2', opacity: 0 }));
+    const a2 = row(21.5, C.u, fw, 'u', 'blue'), b2 = row(13.5, C.v, c1w, 'v', 'purple'), f2 = row(5.5, fc, cf, 'u + v', 'teal');
+    sc.play('Separately close: u has errors at x = 3 and 8, v at x = 12 and 15. Each is 2 errors from the code.', [fadeIn(t1), to([a1, b1], { reveal: 16 })], 1.2, ease.linear);
+    sc.play('Their fold u + v has errors at all four positions: it is 4 errors from the code, twice as far as either input.', [to(f1, { reveal: 16 })], 1.2, ease.linear);
+    sc.play('Correlated: u and v have their errors at the same points, x = 3, 8 and 12.', [fadeIn(t2), to([a2, b2], { reveal: 16 })], 1.2, ease.linear);
+    sc.play('Their fold u + v has errors only there: 3 errors, no farther than its inputs.', [to(f2, { reveal: 16 })], 1.2, ease.linear);
+  });
+})();
+
+/* ================= Figure 13: cancellations are the MCA-bad challenges ================= */
+(() => {
+  const E = [[3, 5, 3], [8, 9, 4], [12, 1, 6]];      // x, e_u(x), e_v(x)
+  const { u, v } = PAIRS.corr;
+  const dists = Array.from({ length: P }, (_, a) => nearest(foldPair(u, v, a)).d);
+  const A = Array.from({ length: P }, (_, a) => a);
+  new Scene('#fig-cancel', n => ({ x: [0, 100], y: [0, 44], pad: n ? 10 : 18 }), sc => {
+    const x0 = sc.narrow ? 19 : 15, w = 99 - x0, h = 6;
+    const hdr = sc.add(Strip({ x: x0, y: 36, w, h, vals: A, marks: A.map(() => 'none'), label: 'α', labelColor: 'yellow', reveal: 0 }));
+    const rows = E.map(([x, eu, evv], j) => {
+      const vals = A.map(a => md(eu + a * evv));
+      return sc.add(Strip({ x: x0, y: 27 - 8 * j, w, h, vals, marks: vals.map(() => 'err'), reveal: 0, label: sc.narrow ? `x=${x}` : `x = ${x}`, labelColor: 'red' }));
+    });
+    const zeroMarks = j => { const [, eu, evv] = E[j]; return A.map(a => md(eu + a * evv) === 0 ? 'hi' : 'err'); };
+    const dr = sc.add(Strip({ x: x0, y: 1, w, h, vals: dists, marks: dists.map(d => d === 2 ? 'hi' : 'none'), reveal: 0, label: sc.narrow ? 'err' : 'errors', labelColor: 'teal' }));
+    sc.play('At x = 3, u is off by 5 and v by 3, so the fold u + αv is off by 5 + 3α (mod 17).', [to(hdr, { reveal: 17 }), to(rows[0], { reveal: 17 })], 1.4, ease.linear);
+    sc.play('That line in α hits 0 exactly once: 5 + 3·4 = 17 = 0. At α = 4 the error at x = 3 cancels.', [set(rows[0], { marks: zeroMarks(0) }), indicate(rows[0])], 1);
+    sc.play('Likewise at x = 8 (9 + 4α, zero at α = 2) and at x = 12 (1 + 6α, zero at α = 14).', [to([rows[1], rows[2]], { reveal: 17 }), set(rows[1], { marks: zeroMarks(1) }), set(rows[2], { marks: zeroMarks(2) })], 1.4, ease.linear);
+    sc.play('So the fold is 3 errors from the code for every α except 2, 4 and 14, where it is 2: one exceptional α per error point.', [to(dr, { reveal: 17 })], 1.3, ease.linear);
+  });
+})();
+
+/* ================= Figure 14: a new list member from nowhere ================= */
+(() => {
+  const { u, v } = PAIRS.far, a = 11, fo = foldPair(u, v, a);
+  const cp = closeList(fo, L16, 4).find(m => m.d <= 8);
+  let best = { agree: -1 };
+  for (const S of combos(16, 4)) {
+    const xs = S.map(i => L16[i]);
+    const cu = wordOf(interp(xs, S.map(i => u[i])), L16), cv = wordOf(interp(xs, S.map(i => v[i])), L16);
+    const ok = L16.map((_, i) => cu[i] === u[i] && cv[i] === v[i]), agree = ok.filter(Boolean).length;
+    if (agree > best.agree) best = { agree, ok };
+  }
+  new Scene('#fig-newcw', n => ({ x: [0, 100], y: [0, 74], pad: n ? 12 : 18 }), sc => {
+    const pn = Panel(sc.narrow ? 8 : 5, 99, 27, 70, L16);
+    const x0 = sc.narrow ? 9 : 6, w = 99 - x0;
+    const grid = sc.add(GridShape(pn, { opacity: 0 }));
+    const rings = sc.add(WordRings(pn, cp.cw, { opacity: 0 }));
+    const ticks = sc.add(ErrTicks(pn, cp.cw, fo, { opacity: 0 }));
+    const dots = sc.add(WordDots(pn, fo, { color: 'teal', reveal: 0 }));
+    const su = sc.add(Strip({ x: x0, y: 11.5, w, h: 6, vals: u, marks: best.ok.map(b => b ? 'ok' : 'err'), reveal: 0, label: 'u', labelColor: 'blue' }));
+    const sv = sc.add(Strip({ x: x0, y: 2.5, w, h: 6, vals: v, marks: best.ok.map(b => b ? 'ok' : 'err'), reveal: 0, label: 'v', labelColor: 'purple' }));
+    sc.play('The far pair of Figure 10, folded at α = 11, in teal.', [fadeIn(grid), to(dots, { reveal: 16 })], 1.2, ease.linear);
+    sc.play(`It agrees with the cubic ${polyStr(cp.c)} on ${16 - cp.d} points: within radius 8.`, [fadeIn(rings), fadeIn(ticks)], 1.1);
+    sc.play(`Is that cubic c₀ + 11c₁ for codewords c₀, c₁ close to u and v? The best codeword pair matches (u, v) jointly on only ${best.agree} points.`, [to([su, sv], { reveal: 16 })], 1.4, ease.linear);
+    sc.play('So the cubic is a new list member, the fold of no nearby pair. MCA says this happens for at most an ε fraction of α.', [indicate(rings)], 1);
+  });
+})();
+
+/* ================= Figure 15: pairs {x, -x} and their squares (static SVG) ================= */
+(() => {
+  const svg = $('#fig-split svg'), NS = 'http://www.w3.org/2000/svg';
+  const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.append(e); return e; };
+  const X = i => 40 + i * 38, top = 70, bot = 165;
+  const L2 = [1, 2, 4, 8, 9, 13, 15, 16], X2 = j => 40 + (j + 4) * 38 - 19 + 0;
+  for (let i = 0; i < 8; i++) {
+    const a = X(i), b = X(15 - i), ry = 10 + (7 - i) * 5;
+    el('path', { d: `M ${a} ${top - 12} A ${(b - a) / 2} ${ry} 0 0 1 ${b} ${top - 12}`, fill: 'none', style: 'stroke: var(--muted)', 'stroke-width': 1.3 });
+    const sq = md((i + 1) * (i + 1)), j = L2.indexOf(sq);
+    for (const s of [a, b]) el('line', { x1: s, y1: top + 12, x2: X2(j), y2: bot - 14, style: 'stroke: var(--rule)', 'stroke-width': 1.2 });
+  }
+  for (let i = 0; i < 16; i++) { el('circle', { cx: X(i), cy: top, r: 11, style: 'fill: var(--bg-3); stroke: var(--fg-2)' }); el('text', { x: X(i), y: top + 4.5, 'text-anchor': 'middle', class: 'svg-text', style: 'font: 500 12px var(--mono); fill: var(--fg)' }, i + 1); }
+  L2.forEach((y, j) => { el('circle', { cx: X2(j), cy: bot, r: 11, style: 'fill: var(--bg-3); stroke: var(--teal)' }); el('text', { x: X2(j), y: bot + 4.5, 'text-anchor': 'middle', style: 'font: 500 12px var(--mono); fill: var(--fg)' }, y); });
+  el('text', { x: 6, y: top + 4, style: 'font: 600 13px var(--sans); fill: var(--fg-2)' }, 'L');
+  el('text', { x: 6, y: bot + 4, style: 'font: 600 13px var(--sans); fill: var(--teal)' }, 'L²');
+  el('text', { x: 620, y: 124, 'text-anchor': 'end', style: 'font: 500 12px var(--sans); fill: var(--muted)' }, 'x ↦ x²');
+})();
+
+/* ================= FRI helpers ================= */
+const half = a => md(a * inv(2));
+const friFold = (w, dom, a) => {           // returns [domain of squares (sorted), values]
+  const out = new Map();
+  dom.forEach((x, i) => { const y = md(x * x); if (out.has(y)) return; const j = dom.indexOf(md(-x)); out.set(y, md(half(w[i] + w[j]) + a * md((w[i] - w[j]) * inv(2 * x)))); });
+  const ys = [...out.keys()].sort((p, q) => p - q);
+  return [ys, ys.map(y => out.get(y))];
+};
+const [L2, f1] = friFold(fw, L16, 5), [L4, f2] = friFold(f1, L2, 3);
+function friPanels(sc) {
+  if (sc.narrow) return [Panel(9, 99, 74, 98, L16), Panel(9, 54, 36, 61, L2), Panel(9, 31.5, 3, 27, L4)];
+  return [Panel(4, 54, 8, 48, L16), Panel(60, 82, 8, 48, L2), Panel(88, 99, 8, 48, L4)];
+}
+const friOpts = n => n ? { x: [0, 100], y: [0, 104], pad: 12 } : { x: [0, 100], y: [0, 60], pad: 18 };
+const PairArcs = pn => Shape({ opacity: 0, paint(ctx, s, S) {
+  ctx.strokeStyle = paintColor('muted'); ctx.lineWidth = 1.3;
+  for (let i = 0; i < 8; i++) {
+    const a = S.X(pn.cx(i)), b = S.X(pn.cx(15 - i)), Y = S.Y(pn.y0) + 21;
+    ctx.beginPath(); ctx.ellipse((a + b) / 2, Y, (b - a) / 2, 4 + (7 - i) * 2.2, 0, 0, Math.PI); ctx.stroke();
+  }
+} });
+
+/* ================= Figure 16: FRI commit phase ================= */
+(() => {
+  new Scene('#fig-fri', friOpts, sc => {
+    const [A, B, C] = friPanels(sc), fz = fpx(sc, 14);
+    const gA = sc.add(GridShape(A, { opacity: 0, title: 'f on L', titleColor: 'blue' }));
+    const rA = sc.add(WordRings(A, fw, { reveal: 0 })), dA = sc.add(WordDots(A, fw, { reveal: 0 }));
+    const arcs = sc.add(PairArcs(A));
+    const gB = sc.add(GridShape(B, { opacity: 0, rowLabels: false, title: 'f₁ on L²', titleColor: 'teal' }));
+    const rB = sc.add(WordRings(B, wordOf([8, 9], L2), { reveal: 0 })), dB = sc.add(WordDots(B, f1, { color: 'teal', reveal: 0 }));
+    const gC = sc.add(GridShape(C, { opacity: 0, rowLabels: false, title: 'f₂', titleColor: 'teal' }));
+    const dC = sc.add(WordDots(C, f2, { color: 'teal', reveal: 0 }));
+    const aT = sc.add(Label({ x: B.x0, y: sc.narrow ? B.y1 + 3 : 53.5, text: 'α = 5', align: 'left', size: fz, color: 'yellow', weight: 600, opacity: 0, dx: sc.narrow ? 70 : 52 }));
+    const bT = sc.add(Label({ x: C.x0, y: sc.narrow ? C.y1 + 3 : 53.5, text: 'β = 3', align: 'left', size: fz, color: 'yellow', weight: 600, opacity: 0, dx: sc.narrow ? 70 : 24 }));
+    sc.play('f on L: 16 values of a polynomial of degree < 4, each on its codeword ring.', [fadeIn(gA), to([rA, dA], { reveal: 16 })], 1.3, ease.linear);
+    sc.play('Pair each x with −x = 17 − x. Each pair gives f_e(x²) = (f(x) + f(−x))/2 and f_o(x²) = (f(x) − f(−x))/(2x).', [fadeIn(arcs)], 1);
+    sc.play('The verifier sends α = 5.', [fadeIn(aT), indicate(aT)], .7);
+    sc.play(`f₁ = f_e + 5·f_o on L²: 8 values, (${f1.join(', ')}), all on the line 8 + 9y.`, [fadeIn(gB), to([dB, rB], { reveal: 8 })], 1.4, ease.linear);
+    sc.play('The verifier sends β = 3.', [fadeIn(bT), indicate(bT)], .7);
+    sc.play(`f₂ = (f₁)_e + 3·(f₁)_o on L⁴ = {${L4.join(', ')}}: the value ${f2[0]} four times, a constant.`, [fadeIn(gC), to(dC, { reveal: 4 })], 1.1, ease.linear);
+    sc.play('Degree < 1 is reached: the prover sends the constant 1 in the clear and the verifier checks it directly.', [indicate(dC)], .9);
+  });
+})();
+
+/* ================= Figure 17: FRI query phase against a cheater ================= */
+(() => {
+  const w = withErr(fw, [[3, 6]]);
+  const foldAt = (a, b, x, al) => md(half(a + b) + al * md((a - b) * inv(2 * x)));
+  const q5 = foldAt(w[4], w[11], 5, 5), q3 = foldAt(w[2], w[13], 3, 5);
+  const i8 = L2.indexOf(8), i9 = L2.indexOf(9), l2 = foldAt(f1[i8], f1[i9], 8, 3), i13 = L4.indexOf(md(64));
+  new Scene('#fig-friq', friOpts, sc => {
+    const [A, B, C] = friPanels(sc);
+    const gA = sc.add(GridShape(A, { title: 'committed word', titleColor: 'blue' })), rA = sc.add(WordRings(A, fw));
+    const tA = sc.add(ErrTicks(A, fw, w, { opacity: 0 }));
+    const dA = sc.add(WordDots(A, fw, { colors: fw.map(() => 'blue') }));
+    const gB = sc.add(GridShape(B, { rowLabels: false, title: 'f₁', titleColor: 'teal', opacity: 0 })), dB = sc.add(WordDots(B, f1, { color: 'teal', reveal: 0 }));
+    const gC = sc.add(GridShape(C, { rowLabels: false, title: 'f₂', titleColor: 'teal', opacity: 0 })), dC = sc.add(WordDots(C, f2, { color: 'teal', reveal: 0 }));
+    const hA5 = sc.addAll([4, 11].map(i => ColHi(A, i))), hB8 = sc.add(ColHi(B, i8)), hB9 = sc.add(ColHi(B, i9)), hC = sc.add(ColHi(C, i13));
+    const hA3 = sc.addAll([2, 13].map(i => ColHi(A, i))), hB9b = sc.add(ColHi(B, i9, { color: 'red' }));
+    sc.play('The committed word is f except f(3) = 7 instead of 1.', [to(dA, { vals: w, colors: w.map((v, i) => i === 2 ? 'red' : 'blue') }), fadeIn(tA)], 1);
+    sc.play('The committed folds look honest: f₁ = 8 + 9y on L², then the constant 1.', [fadeIn([gB, gC]), to(dB, { reveal: 8 }), to(dC, { reveal: 4 })], 1.2, ease.linear);
+    sc.play(`Query x = 5: the verifier reads f(5) = ${w[4]} and f(12) = ${w[11]}.`, [lagged(hA5.map(fadeIn), .4)], .9);
+    sc.play(`They give f₁(8) = (12 + 7)/2 + 5·(12 − 7)/10 = ${q5}, matching the committed f₁(8) = ${f1[i8]}.`, [fadeIn(hB8), to(hB8, { color: 'green' })], 1.1);
+    sc.play(`Next layer: f₁(8) = ${f1[i8]} and f₁(9) = ${f1[i9]} give f₂(13) = (12 + 4)/2 + 3·(12 − 4)/16 = ${l2}, matching. The query passes.`, [fadeIn([hB9, hC]), to(hC, { color: 'green' })], 1.2);
+    sc.play(`Query x = 3: the verifier reads f(3) = ${w[2]} and f(14) = ${w[13]}.`, [fadeOut([...hA5, hB8, hB9, hC]), lagged(hA3.map(fadeIn), .4)], 1);
+    sc.play(`They give f₁(9) = (7 + 9)/2 + 5·(7 − 9)/6 = ${q3}, but the committed f₁(9) = ${f1[i9]}: reject.`, [fadeIn(hB9b), indicate(dB)], 1.1);
+  });
+})();
+
+/* ================= Figure 18: one WHIR round ================= */
+(() => {
+  new Scene('#fig-whir', n => n ? { x: [0, 100], y: [0, 100], pad: 12 } : { x: [0, 100], y: [0, 60], pad: 18 }, sc => {
+    const N = sc.narrow, fz = fpx(sc, 13), small = fpx(sc, 12);
+    const yF = N ? 90 : 53, yS = N ? 72 : 42, yG = N ? 52 : 30, yQ = N ? 34 : 18, yC = N ? 10 : 5;
+    const PL = p => sc.add(Shape({ opacity: 0, align: 'left', color: 'fg-2', weight: 500, size: small, ...p, paint(ctx, s, S) {
+      ctx.font = `${s.weight} ${s.size}px ${tok('sans')}`; ctx.fillStyle = paintColor(s.color); ctx.textBaseline = 'middle'; plateText(ctx, s.text, S.X(s.x), S.Y(s.y), s.align, 4);
+    } }));
+    const bar = (x0, x1, y, col, txt, sub, below) => [
+      sc.add(Rect({ x: x0, y: y - 2, w: x1 - x0, h: 4, color: col, fill: col, width: 0, opacity: 0, radius: 3 })),
+      PL({ x: x0, y: y + (N ? 5 : 4.5), text: txt, size: fz, weight: 600, color: col }),
+      PL({ x: x1, y: below ? y - (N ? 5 : 4.5) : y + (N ? 5 : 4.5), text: sub, align: 'right' })];
+    const F = bar(4, 96, yF, 'blue', 'f', N ? '2²⁵ entries · rate 1/2' : '2²⁵ entries · 2²⁴ coefficients · rate 1/2');
+    const qx = [9, 21, 34, 47, 58, 71, 83, 92];
+    const ticks = qx.map(x => sc.add(Line({ x1: x, y1: yF + 3, x2: x, y2: yF - 3, color: 'yellow', width: 3, draw: 0 })));
+    const arrows = qx.map((x, j) => sc.add(Arrow({ x1: x, y1: yF - 3, x2: 4 + (x - 4) / 92 * 46, y2: yG + 2.4, color: 'yellow', width: 1.2, draw: 0, opacity: .5 })));
+    const chips = [0, 1, 2, 3].map(j => sc.add(Shape({ j, opacity: 0, paint(ctx, s, S) {
+      const X = S.X(6 + j * (N ? 12 : 8)), Y = S.Y(yS), r = N ? 13 : 15;
+      ctx.beginPath(); ctx.roundRect(X - r, Y - 11, 2 * r, 22, 6); ctx.fillStyle = paintColor('bg-2'); ctx.fill(); ctx.fillStyle = paintColor('yellow'); ctx.globalAlpha *= .25; ctx.fill(); ctx.globalAlpha /= .25;
+      ctx.strokeStyle = paintColor('yellow'); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = paintColor('yellow'); ctx.font = `600 ${small}px ${tok('mono')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`α${'₁₂₃₄'[j]}`, X, Y + 1);
+    } })));
+    const sLbl = PL({ x: N ? 52 : 40, y: yS, text: N ? 'sumcheck: 2²⁴ → 2²⁰' : 'sumcheck fixes 4 variables: 2²⁴ → 2²⁰ coefficients' });
+    const G = bar(4, 50, yG, 'teal', 'g', N ? 'rate 1/16' : '2²⁴ entries · 2²⁰ coeff. · rate 1/16', true);
+    const ood = sc.add(Dot({ x: N ? 62 : 60, y: yG, r: 7, color: 'yellow', opacity: 0 }));
+    const oodL = sc.add(Label({ x: N ? 66 : 63, y: yG, text: N ? 'z ∉ L: ĝ(z)' : 'z outside L: prover sends ĝ(z)', align: 'left', size: small, color: 'yellow', opacity: 0 }));
+    const qL = sc.add(Label({ x: 52, y: yQ, text: N ? '200 shift queries → 200 constraints' : '200 shift queries: each folds a block of 16 entries of f into one value of g', size: small, color: 'fg-2', opacity: 0 }));
+    const box = sc.add(Rect({ x: 4, y: yC, w: 92, h: N ? 12 : 8, color: 'green', width: 2, opacity: 0, radius: 6 }));
+    const boxL = sc.add(Label({ x: 50, y: yC + (N ? 6 : 4), text: N ? 'one claim: g ∈ CRS (γ combines 202)' : 'one claim for the next round: g in a constrained code, with γ combining 1 + 1 + 200 constraints', size: small, color: 'green', weight: 600, opacity: 0 }));
+    sc.play('Start: f, committed, with the claim that it lies in a constrained Reed-Solomon code.', [fadeIn(F)], 1);
+    sc.play('Four sumcheck rounds: each challenge αᵢ fixes one variable of f̂, folding the claim and the word together.', [lagged(chips.map(fadeIn), .4), fadeIn(sLbl)], 1.4);
+    sc.play('The prover commits g, the folded polynomial, on a domain half as long. Coefficients shrank 16×, length 2×: rate 1/2 → 1/16.', [fadeIn(G)], 1.1);
+    sc.play('Out-of-domain sample: the verifier picks z outside L and the prover answers ĝ(z). At most one list member matches it.', [fadeIn([ood, oodL]), indicate(ood)], 1.1);
+    sc.play('Shift queries: the verifier opens t = 200 blocks of f, folds each with α₁…α₄, and demands that g match at the folded point.', [lagged([...ticks.map(create), ...arrows.map(create)], .1), fadeIn(qL)], 1.6);
+    sc.play('A random γ combines the old claim, the OOD answer and the 200 shift constraints into one constrained-code claim about g.', [create(box), fadeIn(boxL)], 1.2);
+  });
+})();
+
+/* ================= Figure 19: queries per committed word ================= */
+const tFor = (rho, lam = 100) => Math.ceil(2 * lam / -Math.log2(rho) - 1e-9);
+(() => {
+  const fri = Array.from({ length: 24 }, () => tFor(1 / 2));
+  const whir = Array.from({ length: 6 }, (_, i) => tFor(2 ** -(1 + 3 * i)));
+  $('#fig-queries .readout').textContent = `Merkle openings: FRI 24 × ${fri[0]} = ${fri.reduce((a, b) => a + b)} · WHIR ${whir.join(' + ')} = ${whir.reduce((a, b) => a + b)}`;
+  new Scene('#fig-queries', n => ({ x: [0, 100], y: [0, n ? 100 : 108], pad: n ? 12 : 18 }), sc => {
+    const fz = fpx(sc, 13), x0 = sc.narrow ? 14 : 10, x1 = 98;
+    const panel = (y0, vals, col, name) => {
+      const h = 34, bw = (x1 - x0) / 24;
+      const lbl = sc.add(Label({ x: x0, y: y0 + h + 5, text: name, align: 'left', size: fz, weight: 600, color: col, opacity: 0 }));
+      const axis = sc.add(Line({ x1: x0, y1: y0, x2: x1, y2: y0, color: 'rule', width: 1, draw: 0 }));
+      const bars = vals.map((v, i) => sc.add(Shape({ hgt: 0, opacity: 1, paint(ctx, s, S) {
+        const X = S.X(x0 + i * bw * (vals.length === 6 ? 4 : 1) + bw * .12), W = S.sx * bw * (vals.length === 6 ? 4 : 1) * .76;
+        const Hh = S.sy * h * s.hgt / 220;
+        ctx.fillStyle = paintColor(col); ctx.globalAlpha *= .8; ctx.fillRect(X, S.Y(y0) - Hh, W, Hh); ctx.globalAlpha /= .8;
+        if (s.hgt > 1 && (vals.length === 6 || i === 0)) { ctx.fillStyle = paintColor('fg'); ctx.font = `500 ${fpx(S, 12)}px ${tok('mono')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(String(Math.round(s.hgt)), X + W / 2, S.Y(y0) - Hh - 2); }
+      } })));
+      return { lbl, axis, bars, vals };
+    };
+    const A = panel(56, fri, 'muted', 'FRI: 24 words, rate 1/2 throughout');
+    const B = panel(8, whir, 'teal', 'WHIR: 6 words, rate 1/2, 1/16, 1/128, …');
+    sc.play(`FRI: every layer keeps rate 1/2, so each of its 24 committed words is opened at all ${fri[0]} query points.`, [fadeIn(A.lbl), create(A.axis), lagged(A.bars.map((b, i) => to(b, { hgt: A.vals[i] })), .15)], 1.6);
+    sc.play(`WHIR: the rate falls 8× per round, so the counts fall: ${whir.join(', ')}.`, [fadeIn(B.lbl), create(B.axis), lagged(B.bars.map((b, i) => to(b, { hgt: B.vals[i] })), .3)], 1.6);
+  });
+})();
+
+/* ================= Figure 20: queries against the radius ================= */
+(() => {
+  const out = $('#fig-tcount .readout');
+  const tq = d => 100 / -Math.log2(1 - d) - 1e-9;
+  const sc = new Scene('#fig-tcount', n => ({ x: [-.08, 1.02], y: [-.35, 3.25], pad: n ? 14 : 22, controls: false }), (sc, { i = 2 }) => {
+    const rho = 2 ** -i, R = [['(1−ρ)/2', (1 - rho) / 2, 'green'], ['1−√ρ', 1 - Math.sqrt(rho), 'orange'], ['1−ρ', 1 - rho, 'red']];
+    const fz = fpx(sc, 12);
+    sc.add(Shape({ paint(ctx, s, S) {
+      ctx.strokeStyle = paintColor('grid'); ctx.lineWidth = 1; ctx.font = `500 ${fz}px ${tok('mono')}`; ctx.fillStyle = paintColor('muted');
+      for (const e of [0, 1, 2, 3]) { const Y = S.Y(e); ctx.beginPath(); ctx.moveTo(S.X(0), Y); ctx.lineTo(S.X(1), Y); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(10 ** e), S.X(0) - 6, Y); }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (const x of [0, .25, .5, .75, 1]) ctx.fillText(String(x), S.X(x), S.Y(0) + 6);
+      ctx.fillText('radius δ', S.X(.5), S.Y(-.2) + 4);
+      ctx.strokeStyle = paintColor('blue'); ctx.lineWidth = 2.5; ctx.beginPath();
+      for (let k = 1; k <= 400; k++) { const d = .005 + .99 * k / 400, Y = S.Y(Math.log10(tq(d))); k === 1 ? ctx.moveTo(S.X(d), Y) : ctx.lineTo(S.X(d), Y); }
+      ctx.stroke();
+      R.forEach(([nm, d, col], j) => {
+        const t = Math.ceil(tq(d)), X = S.X(d), Y = S.Y(Math.log10(t));
+        ctx.strokeStyle = paintColor(col); ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X, S.Y(0)); ctx.lineTo(X, Y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = paintColor(col); ctx.beginPath(); ctx.arc(X, Y, 6, 0, 7); ctx.fill();
+        ctx.font = `600 ${fz}px ${tok('mono')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        const txt = `${nm}: t = ${t}`, wdt = ctx.measureText(txt).width;
+        const tx = Math.min(X + 8, S.w - wdt - 6);
+        ctx.fillText(txt, tx, Y - 8 - j * 0);
+      });
+    } }));
+    out.textContent = `ρ = 1/${2 ** i} · ` + R.map(([nm, d]) => `${nm} = ${d.toFixed(3)} → ${Math.ceil(tq(d))}`).join(' · ');
+  });
+  range($('#t-rho'), v => sc.rebuild({ i: v }), v => `1/${2 ** v}`);
+})();
+
+/* ================= Figure 21: epsilon against the field size ================= */
+const johnsonA = (n, rho = .5, eta = .05) => {
+  const delta = 1 - Math.sqrt(rho) - eta, m = Math.max(Math.ceil(Math.sqrt(rho) / eta), 3) + .5;
+  return (2 * m ** 5 + 3 * m * delta * rho) / (3 * rho ** 1.5) * n + m / Math.sqrt(rho);
+};
+(() => {
+  const out = $('#fig-eps .readout');
+  const sc = new Scene('#fig-eps', n => ({ x: [-14, 205], y: [-48, 240], pad: n ? 14 : 22, controls: false }), (sc, { ln = 22 }) => {
+    const n = 2 ** ln, rho = .5, udr = Math.log2(((1 - rho) / 2) * n + 1), jA = Math.log2(johnsonA(n));
+    const fz = fpx(sc, 12);
+    sc.add(Shape({ paint(ctx, s, S) {
+      ctx.font = `500 ${fz}px ${tok('mono')}`; ctx.strokeStyle = paintColor('grid'); ctx.fillStyle = paintColor('muted'); ctx.lineWidth = 1;
+      for (const b of [0, 50, 100, 150, 200]) { const Y = S.Y(b); ctx.beginPath(); ctx.moveTo(S.X(0), Y); ctx.lineTo(S.X(200), Y); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(String(b), S.X(0) - 6, Y); }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (const b of [0, 50, 100, 150, 200]) ctx.fillText(String(b), S.X(b), S.Y(-8));
+      ctx.fillText('log₂ |F|', S.X(100), S.Y(-32));
+      ctx.strokeStyle = paintColor('fg-2'); ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(S.X(0), S.Y(100)); ctx.lineTo(S.X(200), S.Y(100)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillStyle = paintColor('fg-2'); ctx.fillText('100 bits', S.X(2), S.Y(100) - 3);
+      const line = (off, col, nm) => {
+        ctx.strokeStyle = paintColor(col); ctx.lineWidth = 2.5; ctx.beginPath();
+        const xa = Math.max(0, off), xb = 200; ctx.moveTo(S.X(xa), S.Y(xa - off)); ctx.lineTo(S.X(xb), S.Y(xb - off)); ctx.stroke();
+        ctx.fillStyle = paintColor(col); ctx.font = `600 ${fz}px ${tok('sans')}`; ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText(nm, S.X(196) - 6, S.Y(196 - off) + 4);
+      };
+      line(udr, 'green', 'unique decoding'); line(jA, 'orange', 'Johnson');
+      for (const [b, nm] of [[Math.log2(17), 'F₁₇'], [31, '31-bit'], [64, '64-bit'], [128, '128-bit']]) {
+        ctx.strokeStyle = paintColor('yellow'); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(S.X(b), S.Y(0)); ctx.lineTo(S.X(b), S.Y(205)); ctx.stroke();
+        ctx.fillStyle = paintColor('yellow'); ctx.font = `600 ${fz}px ${tok('sans')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        if (b > 10 || !sc.narrow) ctx.fillText(nm, S.X(b) + (b < 10 ? 10 : 0), S.Y(207));
+      }
+    } }));
+    const f = x => Math.round(x * 10) / 10;
+    out.textContent = `n = 2^${ln} · 128-bit field: ${f(128 - udr)} bits (unique), ${f(128 - jA)} bits (Johnson) · 31-bit field: ${f(31 - udr)}, ${f(31 - jA)}`;
+  });
+  range($('#eps-n'), v => sc.rebuild({ ln: v }));
+})();
+
+/* ================= Figure 22: the whole picture ================= */
+(() => {
+  new Scene('#fig-whole', n => n ? { x: [0, 100], y: [0, 125], pad: 12 } : { x: [0, 100], y: [12, 42], pad: 18 }, sc => {
+    const N = sc.narrow, fz = fpx(sc, 13), sm = fpx(sc, 12);
+    const steps = [
+      ['claim', 'p(z) = y', 'fg', 'false → far (Fig. 8)'],
+      ['commit', 'Merkle root', 'blue', 'distance (Fact 1)'],
+      ['fold', 'w + α·w′', 'teal', 'far stays far (Thm 2)'],
+      ['fold again', 'α₂, α₃, …', 'teal', 'lists stay (Lemma 1)'],
+      ['last word', 'in the clear', 'green', 'checked directly'],
+      ['queries', 't positions', 'yellow', 'miss: (1 − δ)ᵗ'],
+    ];
+    const objs = steps.map(([t, s, col, why], j) => {
+      const cx = N ? 50 : 8.5 + j * 16.6, cy = N ? 116 - j * 20 : 30;
+      const bw = N ? 60 : 14.5, bh = N ? 9 : 11;
+      const box = sc.add(Rect({ x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh, color: col, width: 2, radius: 6, opacity: 0 }));
+      const l1 = sc.add(Label({ x: cx, y: cy + (N ? 2 : 2.4), text: t, size: fz, weight: 600, color: col, opacity: 0 }));
+      const l2 = sc.add(Label({ x: cx, y: cy - (N ? 2 : 2.4), text: s, size: sm, color: 'fg-2', opacity: 0 }));
+      const l3 = sc.add(Label({ x: cx, y: N ? cy - 7.8 : cy - 12, text: why, size: sm, color: 'muted', opacity: 0 }));
+      const arr = j ? sc.add(Arrow({ x1: N ? 50 : cx - 16.6 + 7.4, y1: N ? cy + 20 - 9.8 : cy, x2: N ? 50 : cx - 7.4, y2: N ? cy + 5 : cy, color: 'muted', width: 1.5, draw: 0 })) : null;
+      return { box, l1, l2, l3, arr };
+    });
+    const lines = ['The claim about the polynomial becomes a proximity question: a false claim leaves a word far from the code.',
+      'The prover commits the word with a Merkle root; distance means any wrong word is wrong in many places.',
+      'A random fold shrinks the word; by the proximity gap, a far word stays far except with probability ε.',
+      'Folding repeats; mutual correlated agreement keeps the fold\'s list equal to the fold of the list, as WHIR needs.',
+      'The last word is short enough to send whole and check directly.',
+      'Random queries check each fold against the word above it; a far word forces mismatches on a δ fraction.'];
+    objs.forEach((o, j) => sc.play(lines[j], [o.arr ? create(o.arr) : [], create(o.box), fadeIn([o.l1, o.l2]), fadeIn(o.l3)], 1));
+  });
+})();
+</script>
